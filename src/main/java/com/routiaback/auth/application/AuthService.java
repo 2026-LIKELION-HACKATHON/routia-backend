@@ -64,7 +64,7 @@ public class AuthService {
 		return new EmailDuplicateCheckResult(userRepository.existsByEmail(emailNormalizer.normalize(email)));
 	}
 
-	@Transactional
+	@Transactional(noRollbackFor = ApiException.class)
 	public void issueSignupVerificationCode(EmailVerificationCodeCommand command) {
 		String email = emailNormalizer.normalize(command.email());
 		Instant now = clock.instant();
@@ -76,7 +76,7 @@ public class AuthService {
 		try {
 			emailSender.send(email, VERIFICATION_SUBJECT, mailRenderer.render(code));
 		} catch (RuntimeException ex) {
-			// SMTP cannot be rolled back with the DB. Consuming the row prevents a never-delivered code from being accepted later.
+			// This method commits failed attempts as consumed audit rows; SMTP itself is outside the DB transaction.
 			verificationRepository.save(verification.failDelivery(now));
 			throw new ApiException(ErrorCode.EMAIL_SEND_FAILED);
 		}

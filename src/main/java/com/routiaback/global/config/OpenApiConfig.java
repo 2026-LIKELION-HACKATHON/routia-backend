@@ -17,18 +17,7 @@ public class OpenApiConfig {
 			.info(new Info()
 				.title("Routia API")
 				.version("v1")
-				.description("""
-					Routia 백엔드 API 문서입니다.
-
-					Auth 테스트 순서:
-					1. 이메일 중복 확인
-					2. 인증번호 발급 및 메일 수신
-					3. 인증번호 검증
-					4. 회원가입
-					5. 로그인 후 Access Token 확인
-
-					로그인 후 우측 상단 Authorize에 `Bearer` 접두어 없이 Access Token만 입력합니다.
-					""")
+				.description("Routia 백엔드 API 문서입니다.")
 				.contact(new Contact().name("Routia Backend Team")))
 			.components(new Components().addSecuritySchemes(
 				"bearerAuth",

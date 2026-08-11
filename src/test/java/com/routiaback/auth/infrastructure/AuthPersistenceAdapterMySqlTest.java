@@ -2,9 +2,17 @@ package com.routiaback.auth.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.reset;
 
+import com.routiaback.auth.application.AuthService;
+import com.routiaback.auth.application.command.EmailVerificationCodeCommand;
+import com.routiaback.auth.application.port.EmailSenderPort;
 import com.routiaback.auth.domain.EmailVerification;
 import com.routiaback.auth.domain.User;
+import com.routiaback.global.error.ApiException;
+import com.routiaback.global.error.ErrorCode;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -35,6 +44,12 @@ class AuthPersistenceAdapterMySqlTest {
 	private AuthPersistenceAdapter persistenceAdapter;
 
 	@Autowired
+	private AuthService authService;
+
+	@MockitoBean
+	private EmailSenderPort emailSender;
+
+	@Autowired
 	private EmailVerificationJpaRepository verificationJpaRepository;
 
 	@Autowired
@@ -49,6 +64,7 @@ class AuthPersistenceAdapterMySqlTest {
 
 	@BeforeEach
 	void cleanDatabase() {
+		reset(emailSender);
 		verificationJpaRepository.deleteAll();
 		userJpaRepository.deleteAll();
 	}
@@ -93,5 +109,24 @@ class AuthPersistenceAdapterMySqlTest {
 		assertThat(found.id()).isEqualTo(latest.id());
 		assertThat(found.id()).isGreaterThan(older.id());
 		assertThat(found.codeHash()).isEqualTo("latest-hash");
+	}
+
+	@Test
+	void commitsFailedMailVerificationAsConsumed() {
+		willThrow(new IllegalStateException("smtp unavailable"))
+			.given(emailSender).send(anyString(), anyString(), anyString());
+
+		assertThatThrownBy(() -> authService.issueSignupVerificationCode(
+			new EmailVerificationCodeCommand("user@example.com")
+		))
+			.isInstanceOf(ApiException.class)
+			.extracting("errorCode")
+			.isEqualTo(ErrorCode.EMAIL_SEND_FAILED);
+
+		EmailVerification failed = persistenceAdapter
+			.findLatestSignupByEmail("user@example.com")
+			.orElseThrow();
+		assertThat(failed.consumedAt()).isNotNull();
+		assertThat(failed.verifiedAt()).isNull();
 	}
 }

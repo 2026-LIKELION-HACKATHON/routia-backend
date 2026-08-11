@@ -103,7 +103,13 @@ public class AuthService {
 		}
 
 		try {
-			userRepository.save(User.create(email, passwordEncoder.encode(command.password()), command.name(), verification.verifiedAt()));
+			userRepository.save(User.create(
+				email,
+				passwordEncoder.encode(command.password()),
+				command.name(),
+				verification.verifiedAt(),
+				now
+			));
 			verificationRepository.save(verification.consume(now));
 		} catch (DataIntegrityViolationException ex) {
 			throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);

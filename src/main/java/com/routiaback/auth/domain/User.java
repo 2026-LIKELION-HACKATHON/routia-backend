@@ -18,7 +18,11 @@ public record User(
 ) {
 
 	public static User create(String email, String passwordHash, String name, Instant verifiedAt) {
-		return new User(null, email, passwordHash, name, AccountStatus.ACTIVE, verifiedAt, null, verifiedAt, verifiedAt, null);
+		return create(email, passwordHash, name, verifiedAt, verifiedAt);
+	}
+
+	public static User create(String email, String passwordHash, String name, Instant verifiedAt, Instant createdAt) {
+		return new User(null, email, passwordHash, name, AccountStatus.ACTIVE, verifiedAt, null, createdAt, createdAt, null);
 	}
 
 	public User withId(Long id) {

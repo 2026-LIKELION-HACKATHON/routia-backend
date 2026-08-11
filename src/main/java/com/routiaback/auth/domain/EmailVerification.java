@@ -32,7 +32,7 @@ public record EmailVerification(
 		if (consumedAt != null) {
 			throw new ApiException(ErrorCode.EMAIL_NOT_VERIFIED);
 		}
-		if (expiresAt.isBefore(now)) {
+		if (!now.isBefore(expiresAt)) {
 			throw new ApiException(ErrorCode.EMAIL_VERIFICATION_EXPIRED);
 		}
 		if (!matches(code, passwordEncoder)) {
@@ -50,6 +50,6 @@ public record EmailVerification(
 	}
 
 	public boolean canBeUsedForSignup(Instant now) {
-		return verifiedAt != null && consumedAt == null && !expiresAt.isBefore(now);
+		return verifiedAt != null && consumedAt == null && now.isBefore(expiresAt);
 	}
 }

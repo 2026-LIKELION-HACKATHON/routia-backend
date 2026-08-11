@@ -7,8 +7,8 @@ import com.routiaback.auth.application.command.LoginCommand;
 import com.routiaback.auth.application.command.SignupCommand;
 import com.routiaback.auth.application.result.EmailDuplicateCheckResult;
 import com.routiaback.auth.application.result.LoginResult;
+import com.routiaback.global.common.validation.NormalizedEmail;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,7 +32,7 @@ public class AuthController {
 	}
 
 	@GetMapping("/email/check-duplicate")
-	public EmailDuplicateCheckResponse checkDuplicate(@RequestParam @NotBlank @Email String email) {
+	public EmailDuplicateCheckResponse checkDuplicate(@RequestParam @NotBlank @NormalizedEmail String email) {
 		EmailDuplicateCheckResult result = authService.checkDuplicate(email);
 		return new EmailDuplicateCheckResponse(result.duplicated(), !result.duplicated());
 	}
@@ -62,16 +62,16 @@ public class AuthController {
 	public record EmailDuplicateCheckResponse(boolean duplicated, boolean available) {
 	}
 
-	public record EmailVerificationCodeRequest(@NotBlank @Email String email) {
+	public record EmailVerificationCodeRequest(@NotBlank @NormalizedEmail String email) {
 	}
 
-	public record EmailVerifyRequest(@NotBlank @Email String email, @NotBlank String code) {
+	public record EmailVerifyRequest(@NotBlank @NormalizedEmail String email, @NotBlank String code) {
 	}
 
-	public record SignupRequest(@NotBlank @Email String email, @NotBlank String password, @NotBlank String name) {
+	public record SignupRequest(@NotBlank @NormalizedEmail String email, @NotBlank String password, @NotBlank String name) {
 	}
 
-	public record LoginRequest(@NotBlank @Email String email, @NotBlank String password) {
+	public record LoginRequest(@NotBlank @NormalizedEmail String email, @NotBlank String password) {
 	}
 
 	public record LoginResponse(String accessToken, String tokenType) {

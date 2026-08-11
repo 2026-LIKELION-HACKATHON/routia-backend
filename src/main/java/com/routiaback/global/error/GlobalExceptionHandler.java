@@ -1,5 +1,6 @@
 package com.routiaback.global.error;
 
+import com.routiaback.global.common.validation.NormalizedEmail;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,10 @@ public class GlobalExceptionHandler {
 		List<ErrorResponse.FieldErrorResponse> fields = exception.getBindingResult().getFieldErrors().stream()
 			.map(error -> new ErrorResponse.FieldErrorResponse(error.getField(), error.getDefaultMessage()))
 			.toList();
+		if (exception.getBindingResult().getFieldErrors().stream()
+			.anyMatch(error -> "NormalizedEmail".equals(error.getCode()))) {
+			return invalidEmail(fields);
+		}
 		return ResponseEntity.badRequest()
 			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", fields));
 	}
@@ -33,7 +38,19 @@ public class GlobalExceptionHandler {
 				violation.getMessage()
 			))
 			.toList();
+		if (exception.getConstraintViolations().stream()
+			.anyMatch(violation -> violation.getConstraintDescriptor().getAnnotation() instanceof NormalizedEmail)) {
+			return invalidEmail(fields);
+		}
 		return ResponseEntity.badRequest()
 			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", fields));
+	}
+
+	private ResponseEntity<ErrorResponse> invalidEmail(List<ErrorResponse.FieldErrorResponse> fields) {
+		return ResponseEntity.badRequest().body(new ErrorResponse(
+			ErrorCode.INVALID_EMAIL_FORMAT.name(),
+			ErrorCode.INVALID_EMAIL_FORMAT.message(),
+			fields
+		));
 	}
 }

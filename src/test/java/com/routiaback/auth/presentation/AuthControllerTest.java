@@ -57,7 +57,19 @@ class AuthControllerTest {
 		mockMvc.perform(get("/api/v1/auth/email/check-duplicate")
 				.param("email", "not-an-email"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_EMAIL_FORMAT"));
+	}
+
+	@Test
+	void acceptsEmailWithOuterWhitespaceForApplicationNormalization() throws Exception {
+		given(authService.checkDuplicate(" User@Example.COM "))
+			.willReturn(new EmailDuplicateCheckResult(false));
+
+		mockMvc.perform(get("/api/v1/auth/email/check-duplicate")
+				.param("email", " User@Example.COM "))
+			.andExpect(status().isOk());
+
+		then(authService).should().checkDuplicate(" User@Example.COM ");
 	}
 
 	@Test
@@ -83,6 +95,17 @@ class AuthControllerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
 			.andExpect(jsonPath("$.fieldErrors[0].field").value("email"));
+	}
+
+	@Test
+	void rejectsMalformedVerificationEmailWithDedicatedErrorCode() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/email/verification-code")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"email":"not-an-email"}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_EMAIL_FORMAT"));
 	}
 
 	@Test

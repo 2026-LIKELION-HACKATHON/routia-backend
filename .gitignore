@@ -36,3 +36,11 @@ out/
 ### VS Code ###
 .vscode/
 .DS_Store
+
+### Local secrets ###
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml

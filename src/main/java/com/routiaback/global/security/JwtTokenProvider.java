@@ -2,6 +2,7 @@ package com.routiaback.global.security;
 
 import com.routiaback.auth.application.port.TokenProviderPort;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
@@ -40,15 +41,22 @@ public class JwtTokenProvider implements TokenProviderPort {
 
 	public Long parseUserId(String token) {
 		String[] parts = token.split("\\.");
-		if (parts.length != 3 || !sign(parts[0] + "." + parts[1]).equals(parts[2])) {
+		if (parts.length != 3 || !hasValidSignature(parts[0] + "." + parts[1], parts[2])) {
 			throw new IllegalArgumentException("Invalid JWT");
 		}
 		String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
 		long exp = Long.parseLong(extractJsonStringOrNumber(payload, "exp"));
-		if (clock.instant().getEpochSecond() > exp) {
+		if (clock.instant().getEpochSecond() >= exp) {
 			throw new IllegalArgumentException("Expired JWT");
 		}
 		return Long.parseLong(extractJsonStringOrNumber(payload, "sub"));
+	}
+
+	private boolean hasValidSignature(String unsignedToken, String signature) {
+		return MessageDigest.isEqual(
+			sign(unsignedToken).getBytes(StandardCharsets.US_ASCII),
+			signature.getBytes(StandardCharsets.US_ASCII)
+		);
 	}
 
 	private String sign(String value) {

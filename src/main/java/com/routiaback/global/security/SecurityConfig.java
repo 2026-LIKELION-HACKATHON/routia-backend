@@ -24,6 +24,9 @@ public class SecurityConfig {
 				.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(
+					"/v3/api-docs/**",
+					"/swagger-ui/**",
+					"/swagger-ui.html",
 					"/api/v1/auth/email/verification-code",
 					"/api/v1/auth/email/verify",
 					"/api/v1/auth/email/check-duplicate",

@@ -9,6 +9,7 @@ import com.routiaback.auth.application.result.EmailDuplicateCheckResult;
 import com.routiaback.auth.application.result.LoginResult;
 import com.routiaback.global.common.validation.NormalizedEmail;
 import com.routiaback.global.error.ErrorResponse;
+import com.routiaback.global.logging.SensitiveLogSanitizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -19,6 +20,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +37,8 @@ import org.springframework.validation.annotation.Validated;
 @RequestMapping("/api/v1/auth")
 @Tag(name = "Auth", description = "이메일 인증, 회원가입, 로그인 API")
 public class AuthController {
+
+	private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
 	private final AuthService authService;
 
@@ -90,7 +95,10 @@ public class AuthController {
 		)
 	})
 	public void issueVerificationCode(@Valid @RequestBody EmailVerificationCodeRequest request) {
+		String maskedEmail = SensitiveLogSanitizer.maskEmail(request.email());
+		log.info("Email verification request received. email={}", maskedEmail);
 		authService.issueSignupVerificationCode(new EmailVerificationCodeCommand(request.email()));
+		log.info("Email verification request completed. email={} status=success", maskedEmail);
 	}
 
 	@PostMapping("/email/verify")

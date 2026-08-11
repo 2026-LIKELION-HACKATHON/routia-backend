@@ -65,8 +65,9 @@ class AuthServiceTest {
 
 		assertThatThrownBy(() -> authService.issueSignupVerificationCode(new EmailVerificationCodeCommand("a@b.com")))
 			.isInstanceOf(ApiException.class)
-			.extracting("errorCode")
-			.isEqualTo(ErrorCode.EMAIL_SEND_FAILED);
+			.hasCauseInstanceOf(RuntimeException.class)
+			.satisfies(exception -> assertThat(((ApiException) exception).getErrorCode())
+				.isEqualTo(ErrorCode.EMAIL_SEND_FAILED));
 		assertThat(verifications.saved.getFirst().consumedAt()).isNotNull();
 	}
 

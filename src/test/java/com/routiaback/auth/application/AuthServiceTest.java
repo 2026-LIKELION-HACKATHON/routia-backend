@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 class AuthServiceTest {
 
@@ -101,6 +102,45 @@ class AuthServiceTest {
 	}
 
 	@Test
+	void signupKeepsVerificationTimeAndUsesCurrentTimeForUserCreation() {
+		Instant verifiedAt = clock.instant();
+		EmailVerification verification = EmailVerification.issueSignup(
+			"user@example.com",
+			passwordEncoder.encode("123456"),
+			verifiedAt,
+			verifiedAt.plusSeconds(300)
+		).verify("123456", passwordEncoder, verifiedAt);
+		verifications.save(verification);
+		Instant signupAt = verifiedAt.plusSeconds(120);
+		AuthService laterAuthService = authServiceAt(signupAt);
+
+		laterAuthService.signup(new SignupCommand("user@example.com", "secret", "Soeun"));
+
+		User saved = users.saved.getFirst();
+		assertThat(saved.emailVerifiedAt()).isEqualTo(verifiedAt);
+		assertThat(saved.createdAt()).isEqualTo(signupAt);
+		assertThat(saved.updatedAt()).isEqualTo(signupAt);
+	}
+
+	@Test
+	void mapsConcurrentDuplicateSaveToEmailAlreadyExistsWithoutConsumingVerification() {
+		EmailVerification verification = EmailVerification.issueSignup(
+			"user@example.com",
+			passwordEncoder.encode("123456"),
+			clock.instant(),
+			clock.instant().plusSeconds(300)
+		).verify("123456", passwordEncoder, clock.instant());
+		verifications.save(verification);
+		users.failOnSave = true;
+
+		assertThatThrownBy(() -> authService.signup(new SignupCommand("user@example.com", "secret", "Soeun")))
+			.isInstanceOf(ApiException.class)
+			.extracting("errorCode")
+			.isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS);
+		assertThat(verifications.latest().consumedAt()).isNull();
+	}
+
+	@Test
 	void loginReturnsJwtAndUpdatesLastLoginAt() {
 		users.save(User.create("user@example.com", passwordEncoder.encode("secret"), "Soeun", clock.instant()));
 
@@ -110,8 +150,34 @@ class AuthServiceTest {
 		assertThat(users.saved.getFirst().lastLoginAt()).isEqualTo(clock.instant());
 	}
 
+	@Test
+	void invalidPasswordDoesNotUpdateLastLoginTime() {
+		users.save(User.create("user@example.com", passwordEncoder.encode("secret"), "Soeun", clock.instant()));
+
+		assertThatThrownBy(() -> authService.login(new LoginCommand("user@example.com", "wrong")))
+			.isInstanceOf(ApiException.class)
+			.extracting("errorCode")
+			.isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+		assertThat(users.saved.getFirst().lastLoginAt()).isNull();
+	}
+
+	private AuthService authServiceAt(Instant instant) {
+		return new AuthService(
+			users,
+			verifications,
+			emailSender,
+			code -> "<html>" + code + "</html>",
+			passwordEncoder,
+			userId -> "token-" + userId,
+			new EmailNormalizer(),
+			() -> "123456",
+			Clock.fixed(instant, ZoneOffset.UTC)
+		);
+	}
+
 	private static class FakeUserRepository implements UserRepositoryPort {
 		private final List<User> saved = new ArrayList<>();
+		private boolean failOnSave;
 
 		@Override
 		public boolean existsByEmail(String email) {
@@ -125,6 +191,9 @@ class AuthServiceTest {
 
 		@Override
 		public User save(User user) {
+			if (failOnSave) {
+				throw new DataIntegrityViolationException("duplicate email");
+			}
 			User savedUser = user.id() == null ? user.withId((long) saved.size() + 1) : user;
 			saved.removeIf(existing -> existing.id().equals(savedUser.id()));
 			saved.add(savedUser);

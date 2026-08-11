@@ -1,5 +1,6 @@
 package com.routiaback.global.error;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -19,6 +20,18 @@ public class GlobalExceptionHandler {
 	ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException exception) {
 		List<ErrorResponse.FieldErrorResponse> fields = exception.getBindingResult().getFieldErrors().stream()
 			.map(error -> new ErrorResponse.FieldErrorResponse(error.getField(), error.getDefaultMessage()))
+			.toList();
+		return ResponseEntity.badRequest()
+			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", fields));
+	}
+
+	@ExceptionHandler(ConstraintViolationException.class)
+	ResponseEntity<ErrorResponse> handleConstraintViolationException(ConstraintViolationException exception) {
+		List<ErrorResponse.FieldErrorResponse> fields = exception.getConstraintViolations().stream()
+			.map(violation -> new ErrorResponse.FieldErrorResponse(
+				violation.getPropertyPath().toString(),
+				violation.getMessage()
+			))
 			.toList();
 		return ResponseEntity.badRequest()
 			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", fields));

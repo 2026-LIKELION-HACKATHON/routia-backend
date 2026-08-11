@@ -16,6 +16,7 @@ import com.routiaback.auth.application.command.SignupCommand;
 import com.routiaback.auth.application.result.EmailDuplicateCheckResult;
 import com.routiaback.auth.application.result.LoginResult;
 import com.routiaback.global.error.GlobalExceptionHandler;
+import com.routiaback.global.security.JwtTokenProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -35,6 +36,9 @@ class AuthControllerTest {
 
 	@MockitoBean
 	private AuthService authService;
+
+	@MockitoBean
+	private JwtTokenProvider jwtTokenProvider;
 
 	@Test
 	void checksEmailDuplication() throws Exception {
@@ -78,7 +82,7 @@ class AuthControllerTest {
 					"""))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-			.andExpect(jsonPath("$.fields[0].field").value("email"));
+			.andExpect(jsonPath("$.fieldErrors[0].field").value("email"));
 	}
 
 	@Test

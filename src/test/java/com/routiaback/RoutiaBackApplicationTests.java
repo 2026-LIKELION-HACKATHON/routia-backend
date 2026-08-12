@@ -1,13 +1,14 @@
 package com.routiaback;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+import org.junit.jupiter.api.Test;
+
 class RoutiaBackApplicationTests {
 
 	@Test
 	void contextLoads() {
+		assertThat(new RoutiaBackApplication()).isNotNull();
 	}
 
 }

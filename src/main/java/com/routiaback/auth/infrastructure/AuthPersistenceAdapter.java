@@ -45,6 +45,11 @@ class AuthPersistenceAdapter implements UserRepositoryPort, EmailVerificationRep
 			.map(this::toDomain);
 	}
 
+	@Override
+	public Optional<User> findById(Long id) {
+		return userJpaRepository.findById(id).map(this::toDomain);
+	}
+
 	private UserJpaEntity toEntity(User user) {
 		return new UserJpaEntity(user.id(), user.email(), user.passwordHash(), user.name(), user.accountStatus(), user.emailVerifiedAt(), user.lastLoginAt(), user.createdAt(), user.updatedAt(), user.deletedAt());
 	}

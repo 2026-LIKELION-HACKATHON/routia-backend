@@ -8,6 +8,8 @@ import java.util.List;
 public record HomeResponse(
         String userName,
         LocalDate date,
+        String directionText,
+        String homeComment,
         int progressPercent,
         int completedCount,
         int totalCount,
@@ -20,12 +22,8 @@ public record HomeResponse(
                 .map(t -> new TaskPreview(t.itemId(), t.title(), t.completed()))
                 .toList();
         return new HomeResponse(
-                result.userName(),
-                result.date(),
-                result.progressPercent(),
-                result.completedCount(),
-                result.totalCount(),
-                tasks
+                result.userName(), result.date(), result.directionText(), result.homeComment(),
+                result.progressPercent(), result.completedCount(), result.totalCount(), tasks
         );
     }
 }

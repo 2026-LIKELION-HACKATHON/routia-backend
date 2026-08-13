@@ -7,7 +7,6 @@ import java.util.List;
 
 public record RoutineResponse(
         LocalDate date,
-        String directionText,
         int completedCount,
         int totalCount,
         List<Item> items
@@ -18,6 +17,6 @@ public record RoutineResponse(
         List<Item> items = result.items().stream()
                 .map(i -> new Item(i.itemId(), i.title(), i.completed()))
                 .toList();
-        return new RoutineResponse(result.date(), result.directionText(), result.completedCount(), result.totalCount(), items);
+        return new RoutineResponse(result.date(), result.completedCount(), result.totalCount(), items);
     }
 }

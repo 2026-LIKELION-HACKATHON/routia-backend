@@ -6,6 +6,7 @@ import java.util.List;
 public record RoutineTodayResult(
         LocalDate date,
         String directionText,
+        String homeComment,
         int completedCount,
         int totalCount,
         List<Item> items

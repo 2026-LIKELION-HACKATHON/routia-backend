@@ -34,6 +34,7 @@ public class RoutineService {
 
         int completedCount = (int) routineItems.stream().filter(RoutineItem::completed).count();
 
-        return new RoutineTodayResult(today, dailyRoutine.directionText(), completedCount, routineItems.size(), items);
+        return new RoutineTodayResult(today, dailyRoutine.directionText(), dailyRoutine.homeComment(),
+                completedCount, routineItems.size(), items);
     }
 }

@@ -6,6 +6,8 @@ import java.util.List;
 public record HomeResult(
         String userName,
         LocalDate date,
+        String directionText,
+        String homeComment,
         int progressPercent,
         int completedCount,
         int totalCount,

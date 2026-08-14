@@ -34,6 +34,12 @@ public class PersonalizationService {
     private static final Set<String> ALLOWED_PROFILE_IMAGE_TYPES = Set.of(
             "image/jpeg", "image/png", "image/webp"
     );
+    private static final byte[] JPEG_SIGNATURE = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] PNG_SIGNATURE = {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+    };
+    private static final byte[] RIFF_SIGNATURE = {0x52, 0x49, 0x46, 0x46};
+    private static final byte[] WEBP_SIGNATURE = {0x57, 0x45, 0x42, 0x50};
 
     private final UserRepositoryPort userRepository;
     private final UserProfileRepositoryPort profileRepository;
@@ -227,5 +233,30 @@ public class PersonalizationService {
         if (upload.size() > MAX_PROFILE_IMAGE_SIZE) {
             throw new ApiException(ErrorCode.PROFILE_IMAGE_TOO_LARGE);
         }
+        if (!matchesDeclaredImageType(upload.contentType(), upload.content())) {
+            throw new ApiException(ErrorCode.INVALID_PROFILE_IMAGE);
+        }
+    }
+
+    private boolean matchesDeclaredImageType(String contentType, byte[] content) {
+        return switch (contentType) {
+            case "image/jpeg" -> startsWith(content, 0, JPEG_SIGNATURE);
+            case "image/png" -> startsWith(content, 0, PNG_SIGNATURE);
+            case "image/webp" -> startsWith(content, 0, RIFF_SIGNATURE)
+                    && startsWith(content, 8, WEBP_SIGNATURE);
+            default -> false;
+        };
+    }
+
+    private boolean startsWith(byte[] content, int offset, byte[] signature) {
+        if (content.length < offset + signature.length) {
+            return false;
+        }
+        for (int index = 0; index < signature.length; index++) {
+            if (content[offset + index] != signature[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

@@ -7,9 +7,11 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -70,6 +72,18 @@ public class GlobalExceptionHandler {
 		}
 		return ResponseEntity.badRequest()
 			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", fields));
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	ResponseEntity<ErrorResponse> handleUnreadableRequest(HttpMessageNotReadableException exception) {
+		return ResponseEntity.badRequest()
+			.body(new ErrorResponse("INVALID_REQUEST", "요청 값이 올바르지 않습니다.", List.of()));
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException exception) {
+		return ResponseEntity.status(ErrorCode.PROFILE_IMAGE_TOO_LARGE.status())
+			.body(ErrorResponse.of(ErrorCode.PROFILE_IMAGE_TOO_LARGE));
 	}
 
 	private ResponseEntity<ErrorResponse> invalidEmail(List<ErrorResponse.FieldErrorResponse> fields) {

@@ -64,4 +64,24 @@ class RoutinePersistenceAdapter implements DailyRoutineRepositoryPort, RoutineIt
                 saved.getTitle(), saved.getDetail(), saved.getSortOrder(), saved.isCompleted(),
                 saved.getCompletedAt(), saved.getCreatedAt(), saved.getUpdatedAt());
     }
+
+    @Override
+    public List<DailyRoutine> findAllByUserIdAndRoutineDateBetween(Long userId, LocalDate start, LocalDate end) {
+        return dailyRoutineJpaRepository.findAllByUserIdAndRoutineDateBetween(userId, start, end)
+                .stream()
+                .map(e -> new DailyRoutine(e.getId(), e.getUserId(), e.getRoutineDate(), e.getStatus(),
+                        e.getDirectionText(), e.getHomeComment(), e.getCreatedAt(), e.getUpdatedAt()))
+                .toList();
+    }
+
+    @Override
+    public List<RoutineItem> findAllByRoutineIds(List<Long> routineIds) {
+        if (routineIds.isEmpty()) return List.of();
+        return routineItemJpaRepository.findAllByRoutineIdIn(routineIds)
+                .stream()
+                .map(e -> new RoutineItem(e.getId(), e.getRoutineId(), e.getTimeSlot(), e.getCategory(),
+                        e.getTitle(), e.getDetail(), e.getSortOrder(), e.isCompleted(), e.getCompletedAt(),
+                        e.getCreatedAt(), e.getUpdatedAt()))
+                .toList();
+    }
 }

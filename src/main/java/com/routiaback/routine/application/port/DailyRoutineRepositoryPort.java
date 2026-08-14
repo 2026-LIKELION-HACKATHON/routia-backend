@@ -6,4 +6,5 @@ import java.util.Optional;
 
 public interface DailyRoutineRepositoryPort {
     Optional<DailyRoutine> findByUserIdAndRoutineDate(Long userId, LocalDate routineDate);
+    Optional<DailyRoutine> findById(Long id);
 }

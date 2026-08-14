@@ -11,11 +11,11 @@ public record RoutineResponse(
         int totalCount,
         List<Item> items
 ) {
-    public record Item(Long itemId, String title, boolean completed) {}
+    public record Item(Long itemId, String timeSlot, String title, boolean completed) {}
 
     public static RoutineResponse from(RoutineTodayResult result) {
         List<Item> items = result.items().stream()
-                .map(i -> new Item(i.itemId(), i.title(), i.completed()))
+                .map(i -> new Item(i.itemId(), i.timeSlot(), i.title(), i.completed()))
                 .toList();
         return new RoutineResponse(result.date(), result.completedCount(), result.totalCount(), items);
     }

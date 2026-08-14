@@ -2,6 +2,7 @@ package com.routiaback.routine.presentation;
 
 import com.routiaback.global.common.apiResponse.ApiResponse;
 import com.routiaback.routine.application.RoutineService;
+import com.routiaback.routine.application.result.RoutineItemToggleResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,5 +23,14 @@ public class RoutineController {
     @GetMapping("/today")
     public ApiResponse<RoutineResponse> getToday(@AuthenticationPrincipal Long userId) {
         return ApiResponse.success(RoutineResponse.from(routineService.getToday(userId)));
+    }
+
+    @Operation(summary = "할 일 체크박스 토글")
+    @PatchMapping("/today/items/{itemId}")
+    public ApiResponse<RoutineItemToggleResult> toggleItem(
+            @PathVariable Long itemId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        return ApiResponse.success(routineService.toggleItem(userId, itemId));
     }
 }

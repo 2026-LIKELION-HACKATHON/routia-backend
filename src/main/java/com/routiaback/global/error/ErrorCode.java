@@ -21,6 +21,7 @@ public enum ErrorCode {
 	INVALID_PROFILE_IMAGE(HttpStatus.BAD_REQUEST, "지원하지 않는 프로필 이미지 형식입니다."),
 	PROFILE_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "프로필 이미지는 5MB 이하여야 합니다."),
 	PROFILE_IMAGE_STORAGE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "프로필 이미지 저장에 실패했습니다."),
+	ONBOARDING_STEP_ORDER_INVALID(HttpStatus.CONFLICT, "이전 온보딩 단계를 먼저 완료해야 합니다."),
 	ROUTINE_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘의 루틴을 찾을 수 없습니다."),
 	USER_LOCATION_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자의 위치 정보를 찾을 수 없습니다."),
 	ROUTINE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "할 일 항목을 찾을 수 없습니다."),

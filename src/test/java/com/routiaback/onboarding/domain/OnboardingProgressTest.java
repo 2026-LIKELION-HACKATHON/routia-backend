@@ -67,6 +67,22 @@ class OnboardingProgressTest {
     }
 
     @Test
+    void resubmittingDataAfterCompletionDoesNotRegressCompletedStatus() {
+        OnboardingProgress completed = OnboardingProgress.notStarted(1L, STEP1_AT)
+                .completeStep1(STEP1_AT)
+                .completeStep2(STEP2_AT)
+                .completeStep3(STEP3_AT)
+                .startGenerating(STEP3_AT.plusSeconds(60))
+                .complete(STEP3_AT.plusSeconds(120));
+
+        OnboardingProgress resubmitted = completed.completeStep1(STEP3_AT.plusSeconds(180));
+
+        assertThat(resubmitted.status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(resubmitted.lastCompletedStep()).isEqualTo(3);
+        assertThat(resubmitted.completedAt()).isEqualTo(STEP3_AT.plusSeconds(120));
+    }
+
+    @Test
     void transitionsThroughGeneratingCompletedAndFailedStates() {
         OnboardingProgress step3 = OnboardingProgress.notStarted(1L, STEP1_AT)
                 .completeStep1(STEP1_AT)

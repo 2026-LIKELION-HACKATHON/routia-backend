@@ -1,6 +1,7 @@
 package com.routiaback.achievement.application;
 
 import com.routiaback.achievement.application.result.AchievementSummaryResult;
+import com.routiaback.achievement.application.result.WeeklyTrendResult;
 import com.routiaback.routine.application.RoutineService;
 import com.routiaback.routine.application.result.DailyStat;
 import lombok.RequiredArgsConstructor;
@@ -73,5 +74,24 @@ public class AchievementService {
             date = date.minusDays(1);
         }
         return streak;
+    }
+
+    public WeeklyTrendResult getWeeklyTrend(Long userId) {
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+        LocalDate weekEnd = weekStart.plusDays(6);
+
+        List<DailyStat> stats = routineService.getStats(userId, weekStart, weekEnd);
+        Map<LocalDate, DailyStat> statsByDate = stats.stream()
+                .collect(Collectors.toMap(DailyStat::date, s -> s));
+
+        List<WeeklyTrendResult.DayTrend> dayTrends = weekStart.datesUntil(weekEnd.plusDays(1))
+                .map(date -> {
+                    DailyStat stat = statsByDate.getOrDefault(date, new DailyStat(date, 0, 0));
+                    return new WeeklyTrendResult.DayTrend(date, stat.completedCount(), stat.totalCount());
+                })
+                .toList();
+
+        return new WeeklyTrendResult(dayTrends);
     }
 }

@@ -25,4 +25,10 @@ public class AchievementController {
     public ApiResponse<AchievementSummaryResponse> getSummary(@AuthenticationPrincipal Long userId) {
         return ApiResponse.success(AchievementSummaryResponse.from(achievementService.getSummary(userId)));
     }
+
+    @Operation(summary = "주간 수행 추이 조회")
+    @GetMapping("/weekly-trend")
+    public ApiResponse<WeeklyTrendResponse> getWeeklyTrend(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.success(WeeklyTrendResponse.from(achievementService.getWeeklyTrend(userId)));
+    }
 }

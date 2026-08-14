@@ -4,6 +4,7 @@ import com.routiaback.global.error.ApiException;
 import com.routiaback.global.error.ErrorCode;
 import com.routiaback.routine.application.port.DailyRoutineRepositoryPort;
 import com.routiaback.routine.application.port.RoutineItemRepositoryPort;
+import com.routiaback.routine.application.result.DailyStat;
 import com.routiaback.routine.application.result.RoutineItemToggleResult;
 import com.routiaback.routine.application.result.RoutineTodayResult;
 import com.routiaback.routine.application.result.RoutineTodayResult.Item;
@@ -14,7 +15,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -57,5 +61,23 @@ public class RoutineService {
         RoutineItem saved = routineItemRepository.save(toggled);
 
         return new RoutineItemToggleResult(saved.id(), saved.completed());
+    }
+
+    public List<DailyStat> getStats(Long userId, LocalDate start, LocalDate end) {
+        List<DailyRoutine> routines = dailyRoutineRepository.findAllByUserIdAndRoutineDateBetween(userId, start, end);
+        List<Long> routineIds = routines.stream().map(DailyRoutine::id).toList();
+        List<RoutineItem> allItems = routineItemRepository.findAllByRoutineIds(routineIds);
+
+        Map<Long, List<RoutineItem>> itemsByRoutineId = allItems.stream()
+                .collect(Collectors.groupingBy(RoutineItem::routineId));
+
+        return routines.stream()
+                .map(r -> {
+                    List<RoutineItem> items = itemsByRoutineId.getOrDefault(r.id(), List.of());
+                    int completed = (int) items.stream().filter(RoutineItem::completed).count();
+                    return new DailyStat(r.routineDate(), completed, items.size());
+                })
+                .sorted(Comparator.comparing(DailyStat::date))
+                .toList();
     }
 }

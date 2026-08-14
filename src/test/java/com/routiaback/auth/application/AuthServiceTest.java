@@ -191,6 +191,11 @@ class AuthServiceTest {
 		}
 
 		@Override
+		public Optional<User> findById(Long id) {
+			return saved.stream().filter(user -> user.id().equals(id)).findFirst();
+		}
+
+		@Override
 		public User save(User user) {
 			if (failOnSave) {
 				throw new DataIntegrityViolationException("duplicate email");

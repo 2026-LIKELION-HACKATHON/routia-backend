@@ -144,7 +144,7 @@ class PersonalizationServiceTest {
         images.failStore = true;
 
         assertThatThrownBy(() -> service.uploadProfileImage(
-                1L, 1L, new ProfileImageUpload(new byte[]{1}, "image/jpeg")))
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/jpeg")))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PROFILE_IMAGE_STORAGE_FAILED);
@@ -161,7 +161,7 @@ class PersonalizationServiceTest {
                 .isEqualTo(ErrorCode.INVALID_PROFILE_IMAGE);
 
         assertThatThrownBy(() -> service.uploadProfileImage(
-                1L, 1L, new ProfileImageUpload(new byte[5 * 1024 * 1024 + 1], "image/jpeg")))
+                1L, 1L, new ProfileImageUpload(oversizedJpeg(), "image/jpeg")))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PROFILE_IMAGE_TOO_LARGE);
@@ -170,14 +170,58 @@ class PersonalizationServiceTest {
     }
 
     @Test
+    void rejectsImageWhenBytesDoNotMatchDeclaredContentType() {
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/png")))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_PROFILE_IMAGE);
+
+        assertThat(profiles.profile).isNull();
+    }
+
+    @Test
+    void acceptsImagesWhenBytesMatchDeclaredContentTypes() {
+        ProfileResult jpeg = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/jpeg"));
+        ProfileResult png = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(pngBytes(), "image/png"));
+        ProfileResult webp = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(webpBytes(), "image/webp"));
+
+        assertThat(jpeg.profileImage()).isEqualTo("1/new-key.jpg");
+        assertThat(png.profileImage()).isEqualTo("1/new-key.png");
+        assertThat(webp.profileImage()).isEqualTo("1/new-key.webp");
+    }
+
+    @Test
     void removesNewObjectWhenDatabaseSaveFails() {
         profiles.failSave = true;
 
         assertThatThrownBy(() -> service.uploadProfileImage(
-                1L, 1L, new ProfileImageUpload(new byte[]{1}, "image/png")))
+                1L, 1L, new ProfileImageUpload(pngBytes(), "image/png")))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(images.deleted).containsExactly("1/new-key.png");
+    }
+
+    private byte[] jpegBytes() {
+        return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+    }
+
+    private byte[] pngBytes() {
+        return new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    }
+
+    private byte[] webpBytes() {
+        return new byte[]{0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50};
+    }
+
+    private byte[] oversizedJpeg() {
+        byte[] content = new byte[5 * 1024 * 1024 + 1];
+        byte[] signature = jpegBytes();
+        System.arraycopy(signature, 0, content, 0, signature.length);
+        return content;
     }
 
     private static class FakeUserRepository implements UserRepositoryPort {
@@ -228,7 +272,12 @@ class PersonalizationServiceTest {
 
         @Override public String store(Long userId, ProfileImageUpload upload) {
             if (failStore) throw new IllegalStateException("storage unavailable");
-            return userId + "/new-key." + (upload.contentType().equals("image/png") ? "png" : "jpg");
+            String extension = switch (upload.contentType()) {
+                case "image/png" -> "png";
+                case "image/webp" -> "webp";
+                default -> "jpg";
+            };
+            return userId + "/new-key." + extension;
         }
         @Override public void delete(String key) { deleted.add(key); }
     }

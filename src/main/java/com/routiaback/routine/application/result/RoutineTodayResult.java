@@ -11,5 +11,5 @@ public record RoutineTodayResult(
         int totalCount,
         List<Item> items
 ) {
-    public record Item(Long itemId, String title, boolean completed) {}
+    public record Item(Long itemId, String timeSlot, String title, boolean completed) {}
 }

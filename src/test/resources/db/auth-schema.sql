@@ -98,6 +98,34 @@ CREATE TABLE user_skin_concerns (
     CONSTRAINT fk_user_skin_concerns_concern FOREIGN KEY (concern_code) REFERENCES skin_concerns(code) ON DELETE RESTRICT
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
+CREATE TABLE onboarding_progress (
+    user_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'NOT_STARTED',
+    last_completed_step TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    step1_completed_at DATETIME(6) NULL,
+    step2_completed_at DATETIME(6) NULL,
+    step3_completed_at DATETIME(6) NULL,
+    completed_at DATETIME(6) NULL,
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_onboarding_progress_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+CREATE TABLE routine_schedules (
+    user_id BIGINT UNSIGNED NOT NULL,
+    notification_time TIME NOT NULL,
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Seoul',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    notification_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    next_generation_at DATETIME(6) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_routine_schedules_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
 CREATE TABLE daily_routines (
     id BIGINT NOT NULL AUTO_INCREMENT,
     user_id BIGINT NOT NULL,

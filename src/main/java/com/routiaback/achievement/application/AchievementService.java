@@ -1,5 +1,6 @@
 package com.routiaback.achievement.application;
 
+import com.routiaback.achievement.application.result.AchievementHistoryResult;
 import com.routiaback.achievement.application.result.AchievementSummaryResult;
 import com.routiaback.achievement.application.result.WeeklyTrendResult;
 import com.routiaback.routine.application.RoutineService;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,6 +21,7 @@ public class AchievementService {
 
     private static final double STREAK_THRESHOLD = 0.5;
     private static final int STREAK_LOOKUP_DAYS = 90;
+    private static final int HISTORY_WEEK_COUNT = 3;
 
     private final RoutineService routineService;
 
@@ -93,5 +96,38 @@ public class AchievementService {
                 .toList();
 
         return new WeeklyTrendResult(dayTrends);
+    }
+
+    public AchievementHistoryResult getHistory(Long userId) {
+        LocalDate today = LocalDate.now();
+        LocalDate thisWeekStart = today.with(DayOfWeek.MONDAY);
+        LocalDate mostRecentCompleteWeekEnd = thisWeekStart.minusDays(1);
+
+        LocalDate rangeStart = mostRecentCompleteWeekEnd.minusWeeks(HISTORY_WEEK_COUNT - 1).minusDays(6);
+
+        List<DailyStat> stats = routineService.getStats(userId, rangeStart, mostRecentCompleteWeekEnd);
+        Map<LocalDate, DailyStat> statsByDate = stats.stream()
+                .collect(Collectors.toMap(DailyStat::date, s -> s));
+
+        List<AchievementHistoryResult.WeekRecord> weeks = new ArrayList<>();
+        for (int i = 0; i < HISTORY_WEEK_COUNT; i++) {
+            LocalDate weekEnd = mostRecentCompleteWeekEnd.minusWeeks(i);
+            LocalDate weekStart = weekEnd.minusDays(6);
+
+            int totalCompleted = 0;
+            int totalCount = 0;
+            for (LocalDate d = weekStart; !d.isAfter(weekEnd); d = d.plusDays(1)) {
+                DailyStat stat = statsByDate.get(d);
+                if (stat != null) {
+                    totalCompleted += stat.completedCount();
+                    totalCount += stat.totalCount();
+                }
+            }
+
+            int rate = totalCount == 0 ? 0 : (int) Math.round(totalCompleted * 100.0 / totalCount);
+            weeks.add(new AchievementHistoryResult.WeekRecord(weekStart, weekEnd, rate, totalCompleted, totalCount));
+        }
+
+        return new AchievementHistoryResult(weeks);
     }
 }

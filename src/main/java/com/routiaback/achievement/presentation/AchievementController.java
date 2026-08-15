@@ -31,4 +31,10 @@ public class AchievementController {
     public ApiResponse<WeeklyTrendResponse> getWeeklyTrend(@AuthenticationPrincipal Long userId) {
         return ApiResponse.success(WeeklyTrendResponse.from(achievementService.getWeeklyTrend(userId)));
     }
+
+    @Operation(summary = "과거 성취 기록 조회")
+    @GetMapping("/history")
+    public ApiResponse<AchievementHistoryResponse> getHistory(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.success(AchievementHistoryResponse.from(achievementService.getHistory(userId)));
+    }
 }

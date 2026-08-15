@@ -1,7 +1,5 @@
 package com.routiaback.routine.application.generation;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routiaback.global.error.*;
 import com.routiaback.personalization.application.port.*;
 import com.routiaback.personalization.application.result.*;
@@ -17,6 +15,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class RoutineGenerationService {
@@ -51,7 +51,7 @@ public class RoutineGenerationService {
     }
 
     private Map<String,Object> personalization(RoutineGenerationRequest r){Map<String,Object> m=new LinkedHashMap<>();m.put("height",r.profile().height());m.put("weight",r.profile().weight());m.put("gender",r.profile().gender());m.put("ageGroup",r.profile().ageGroup());m.put("bodyGoal",r.needs().bodyGoal());m.put("bodyConcerns",r.needs().bodyConcerns());m.put("skinType",r.needs().skinType());m.put("skinConcerns",r.needs().skinConcerns());m.put("routineTimePreference",r.needs().routineTimePreference());m.put("routineDifficulty",r.needs().routineDifficulty());return m;}
-    private String json(Object value){try{return objectMapper.writeValueAsString(value);}catch(JsonProcessingException ex){throw new IllegalStateException("snapshot serialization failed",ex);}}
+    private String json(Object value){try{return objectMapper.writeValueAsString(value);}catch(JacksonException ex){throw new IllegalStateException("snapshot serialization failed",ex);}}
     private String errorCode(RuntimeException ex){return ex instanceof ApiException a?a.getErrorCode().name():"EXTERNAL_AI_ERROR";}
 
     private RoutineGenerationRequest.PerformanceInput performance(Long userId,LocalDate date){

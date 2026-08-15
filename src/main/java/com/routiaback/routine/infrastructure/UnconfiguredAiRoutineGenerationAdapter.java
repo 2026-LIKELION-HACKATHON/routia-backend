@@ -2,10 +2,14 @@ package com.routiaback.routine.infrastructure;
 
 import com.routiaback.global.error.*;
 import com.routiaback.routine.application.generation.*;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-@Component @ConditionalOnMissingBean(AiRoutineGenerationPort.class)
+@Component
+@ConditionalOnProperty(
+        name = "routia.ai.provider",
+        havingValue = "unconfigured",
+        matchIfMissing = true)
 public class UnconfiguredAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
     private final PromptTemplateLoader prompt;
     public UnconfiguredAiRoutineGenerationAdapter(PromptTemplateLoader prompt){this.prompt=prompt;}

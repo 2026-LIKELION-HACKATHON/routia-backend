@@ -40,4 +40,9 @@ public record RoutineSchedule(
         return new RoutineSchedule(userId, notificationTime, timezone, active, notificationEnabled,
                 nextGenerationAt, createdAt, now);
     }
+
+    public RoutineSchedule advance(Instant nextGenerationAt, Instant now) {
+        return new RoutineSchedule(userId, notificationTime, timezone, active, notificationEnabled,
+                nextGenerationAt, createdAt, now);
+    }
 }

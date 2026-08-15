@@ -1,0 +1,25 @@
+package com.routiaback.notification.domain;
+
+import java.time.*;
+import org.springframework.stereotype.Component;
+
+@Component
+public class RoutineGenerationScheduleCalculator {
+    public static final int GENERATION_LEAD_MINUTES = 10;
+
+    public ScheduledTarget next(LocalTime notificationTime, String timezone, Instant now) {
+        ZoneId zone = ZoneId.of(timezone); ZonedDateTime current = now.atZone(zone);
+        ZonedDateTime notification = LocalDateTime.of(current.toLocalDate(), notificationTime).atZone(zone);
+        ZonedDateTime generation = notification.minusMinutes(GENERATION_LEAD_MINUTES);
+        if (!generation.isAfter(current)) { notification = notification.plusDays(1); generation = notification.minusMinutes(GENERATION_LEAD_MINUTES); }
+        return new ScheduledTarget(notification.toLocalDate(), generation.toInstant(), notification.toInstant());
+    }
+
+    public ScheduledTarget current(RoutineSchedule schedule) {
+        ZoneId zone = ZoneId.of(schedule.timezone());
+        Instant notification = schedule.nextGenerationAt().plusSeconds(GENERATION_LEAD_MINUTES * 60L);
+        return new ScheduledTarget(notification.atZone(zone).toLocalDate(), schedule.nextGenerationAt(), notification);
+    }
+
+    public record ScheduledTarget(LocalDate routineDate, Instant generationAt, Instant notificationAt) { }
+}

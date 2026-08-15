@@ -94,6 +94,14 @@ public class OnboardingController {
         return ApiResponse.success(ProgressResponse.from(onboardingService.getProgress(userId)));
     }
 
+    @PostMapping("/complete")
+    @Operation(summary = "온보딩 완료 및 최초 루틴 생성",
+            description = "1~3단계 완료 후 오늘의 AI 루틴을 즉시 생성합니다. 최초 루틴은 알림 발송 대상이 아닙니다.")
+    @OnboardingApiResponses
+    public ApiResponse<ProgressResponse> complete(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.success(ProgressResponse.from(onboardingService.complete(userId)));
+    }
+
     @Schema(name = "OnboardingStep1Request")
     public record Step1Request(
             @NotNull @DecimalMin(value = "0.0", inclusive = false) @Digits(integer = 4, fraction = 1)

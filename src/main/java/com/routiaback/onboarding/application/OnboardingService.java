@@ -2,6 +2,7 @@ package com.routiaback.onboarding.application;
 
 import com.routiaback.notification.application.port.RoutineScheduleRepositoryPort;
 import com.routiaback.notification.domain.RoutineSchedule;
+import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
 import com.routiaback.onboarding.application.command.Step1Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
@@ -19,6 +20,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.routiaback.routine.application.generation.RoutineGenerationService;
+import com.routiaback.routine.domain.RoutineGenerationType;
+import com.routiaback.onboarding.domain.OnboardingStatus;
 
 @Service
 public class OnboardingService {
@@ -29,17 +33,23 @@ public class OnboardingService {
     private final OnboardingProgressRepositoryPort progressRepository;
     private final RoutineScheduleRepositoryPort scheduleRepository;
     private final Clock clock;
+    private final RoutineGenerationService routineGenerationService;
+    private final RoutineGenerationScheduleCalculator scheduleCalculator;
 
     public OnboardingService(
             PersonalizationService personalizationService,
             OnboardingProgressRepositoryPort progressRepository,
             RoutineScheduleRepositoryPort scheduleRepository,
-            Clock clock
+            Clock clock,
+            RoutineGenerationService routineGenerationService,
+            RoutineGenerationScheduleCalculator scheduleCalculator
     ) {
         this.personalizationService = personalizationService;
         this.progressRepository = progressRepository;
         this.scheduleRepository = scheduleRepository;
         this.clock = clock;
+        this.routineGenerationService = routineGenerationService;
+        this.scheduleCalculator = scheduleCalculator;
     }
 
     @Transactional
@@ -70,7 +80,8 @@ public class OnboardingService {
         personalizationService.updateNeeds(userId, userId, new UpdateNeedsCommand(
                 null, null, null, null, command.routineTimePreference(), command.routineDifficulty()));
 
-        Instant nextGenerationAt = nextOccurrence(command.notificationTime(), now);
+        Instant nextGenerationAt = scheduleCalculator.next(command.notificationTime(),
+                RoutineSchedule.DEFAULT_TIMEZONE, now).generationAt();
         RoutineSchedule schedule = scheduleRepository.findByUserId(userId)
                 .map(current -> current.update(command.notificationTime(), nextGenerationAt, now))
                 .orElseGet(() -> RoutineSchedule.create(
@@ -84,18 +95,28 @@ public class OnboardingService {
         return currentProgress(userId);
     }
 
+    public OnboardingProgress complete(Long userId) {
+        OnboardingProgress progress = currentProgress(userId);
+        if (progress.status() == OnboardingStatus.COMPLETED) return progress;
+        OnboardingProgress generating = progressRepository.save(progress.startGenerating(clock.instant()));
+        LocalDate today = clock.instant().atZone(SCHEDULE_ZONE).toLocalDate();
+        try {
+            RoutineGenerationService.GenerationOutcome outcome = routineGenerationService.generate(
+                    userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null);
+            if (outcome.status() != com.routiaback.routine.domain.RoutineStatus.READY) {
+                throw new com.routiaback.global.error.ApiException(
+                        com.routiaback.global.error.ErrorCode.ROUTINE_GENERATION_FAILED);
+            }
+            return progressRepository.save(generating.complete(clock.instant()));
+        } catch (RuntimeException exception) {
+            progressRepository.save(generating.fail(clock.instant()));
+            throw exception;
+        }
+    }
+
     private OnboardingProgress currentProgress(Long userId) {
         return progressRepository.findByUserId(userId)
                 .orElseGet(() -> OnboardingProgress.notStarted(userId, clock.instant()));
     }
 
-    private Instant nextOccurrence(LocalTime notificationTime, Instant now) {
-        ZonedDateTime zonedNow = now.atZone(SCHEDULE_ZONE);
-        LocalDate date = zonedNow.toLocalDate();
-        ZonedDateTime candidate = LocalDateTime.of(date, notificationTime).atZone(SCHEDULE_ZONE);
-        if (!candidate.isAfter(zonedNow)) {
-            candidate = candidate.plusDays(1);
-        }
-        return candidate.toInstant();
-    }
 }

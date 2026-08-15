@@ -1,5 +1,6 @@
 package com.routiaback.weather.infrastructure;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -15,11 +16,19 @@ import java.math.BigDecimal;
 class UserProfileJpaEntity {
 
     @Id
+    @Column(name = "user_id")
     private Long userId;
 
+    @Column(name = "region_sido")
     private String regionSido;
+
+    @Column(name = "region_sigungu")
     private String regionSigungu;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
     private BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
     private BigDecimal longitude;
 
     public UserProfileJpaEntity(Long userId, String regionSido, String regionSigungu, BigDecimal latitude, BigDecimal longitude) {

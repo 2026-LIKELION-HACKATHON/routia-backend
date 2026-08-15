@@ -126,31 +126,65 @@ CREATE TABLE routine_schedules (
     CONSTRAINT fk_routine_schedules_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
+CREATE TABLE weather_snapshots (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    target_date DATE NOT NULL,
+    region_sido VARCHAR(50) NULL,
+    region_sigungu VARCHAR(50) NULL,
+    latitude DECIMAL(10,7) NULL,
+    longitude DECIMAL(10,7) NULL,
+    temperature_c DECIMAL(5,2) NULL,
+    uv_index DECIMAL(4,1) NULL,
+    weather_condition VARCHAR(50) NULL,
+    provider VARCHAR(50) NULL,
+    observed_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_weather_snapshots_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
 CREATE TABLE daily_routines (
-    id BIGINT NOT NULL AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    weather_snapshot_id BIGINT UNSIGNED NULL,
     routine_date DATE NOT NULL,
-    status VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'GENERATING',
     direction_text TEXT NULL,
     home_comment VARCHAR(1000) NULL,
-    created_at DATETIME(6) NULL,
-    updated_at DATETIME(6) NULL,
-    PRIMARY KEY (id)
+    difficulty_snapshot VARCHAR(30) NOT NULL,
+    time_preference_snapshot VARCHAR(30) NULL,
+    personalization_snapshot JSON NULL,
+    performance_snapshot JSON NULL,
+    generation_error_code VARCHAR(50) NULL,
+    ai_model VARCHAR(100) NULL,
+    prompt_version VARCHAR(50) NULL,
+    generated_at DATETIME(6) NULL,
+    notification_scheduled_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uk_daily_routines_user_date UNIQUE (user_id, routine_date),
+    CONSTRAINT fk_daily_routines_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_daily_routines_weather FOREIGN KEY (weather_snapshot_id) REFERENCES weather_snapshots(id) ON DELETE SET NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 CREATE TABLE routine_items (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    routine_id BIGINT NOT NULL,
+    routine_id BIGINT UNSIGNED NOT NULL,
     time_slot VARCHAR(20) NOT NULL,
     category VARCHAR(20) NOT NULL,
     title VARCHAR(150) NOT NULL,
     detail TEXT NULL,
-    sort_order INT NOT NULL,
+    effect_code VARCHAR(30) NULL,
+    expected_effect VARCHAR(255) NULL,
+    sort_order SMALLINT UNSIGNED NOT NULL,
     is_completed BOOLEAN NOT NULL DEFAULT FALSE,
     completed_at DATETIME(6) NULL,
-    created_at DATETIME(6) NULL,
-    updated_at DATETIME(6) NULL,
-    PRIMARY KEY (id)
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_routine_items_routine FOREIGN KEY (routine_id) REFERENCES daily_routines(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 INSERT INTO body_concerns (code, name, sort_order, active) VALUES

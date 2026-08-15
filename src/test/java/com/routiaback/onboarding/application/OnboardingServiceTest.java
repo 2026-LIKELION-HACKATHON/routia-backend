@@ -6,11 +6,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.given;
 
 import com.routiaback.global.error.ApiException;
 import com.routiaback.global.error.ErrorCode;
 import com.routiaback.notification.application.port.RoutineScheduleRepositoryPort;
 import com.routiaback.notification.domain.RoutineSchedule;
+import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
+import com.routiaback.routine.application.generation.RoutineGenerationService;
+import com.routiaback.routine.domain.RoutineStatus;
 import com.routiaback.onboarding.application.command.Step1Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
@@ -43,12 +47,14 @@ class OnboardingServiceTest {
     private final PersonalizationService personalizationService = mock(PersonalizationService.class);
     private final FakeProgressRepository progressRepository = new FakeProgressRepository();
     private final FakeScheduleRepository scheduleRepository = new FakeScheduleRepository();
+    private final RoutineGenerationService routineGenerationService = mock(RoutineGenerationService.class);
     private OnboardingService service;
 
     @BeforeEach
     void setUp() {
         service = new OnboardingService(personalizationService, progressRepository, scheduleRepository,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), routineGenerationService,
+                new RoutineGenerationScheduleCalculator());
     }
 
     @Test
@@ -116,7 +122,7 @@ class OnboardingServiceTest {
         assertThat(result.lastCompletedStep()).isEqualTo(3);
         assertThat(scheduleRepository.schedule.notificationTime()).isEqualTo(LocalTime.of(10, 0));
         assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T01:00:00Z"));
+                .isEqualTo(Instant.parse("2026-08-15T00:50:00Z"));
         ArgumentCaptor<UpdateNeedsCommand> needs = ArgumentCaptor.forClass(UpdateNeedsCommand.class);
         verify(personalizationService).updateNeeds(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(1L), needs.capture());
@@ -128,17 +134,17 @@ class OnboardingServiceTest {
         progressRepository.progress = completedStep2();
         service.completeStep3(1L, step3Command(LocalTime.of(8, 0)));
         assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T23:00:00Z"));
+                .isEqualTo(Instant.parse("2026-08-15T22:50:00Z"));
 
         progressRepository.progress = completedStep2();
         service.completeStep3(1L, step3Command(LocalTime.MIDNIGHT));
         assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T15:00:00Z"));
+                .isEqualTo(Instant.parse("2026-08-15T14:50:00Z"));
 
         progressRepository.progress = completedStep2();
         service.completeStep3(1L, step3Command(LocalTime.of(23, 59)));
         assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T14:59:00Z"));
+                .isEqualTo(Instant.parse("2026-08-15T14:49:00Z"));
     }
 
     @Test
@@ -165,6 +171,29 @@ class OnboardingServiceTest {
         assertThatThrownBy(() -> service.completeStep3(1L, step3Command(LocalTime.NOON)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(progressRepository.progress.lastCompletedStep()).isEqualTo(2);
+    }
+
+    @Test
+    void completesOnboardingOnlyAfterInitialRoutineSucceeds() {
+        progressRepository.progress = completedStep2().completeStep3(NOW);
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, true));
+
+        OnboardingProgress result = service.complete(1L);
+
+        assertThat(result.status()).isEqualTo(OnboardingStatus.COMPLETED);
+        verify(routineGenerationService).generate(org.mockito.ArgumentMatchers.eq(1L), any(),
+                org.mockito.ArgumentMatchers.eq(com.routiaback.routine.domain.RoutineGenerationType.INITIAL_ONBOARDING),
+                org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void marksOnboardingFailedWhenRoutineGenerationFails() {
+        progressRepository.progress = completedStep2().completeStep3(NOW);
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willThrow(new ApiException(ErrorCode.ROUTINE_GENERATION_FAILED));
+        assertThatThrownBy(() -> service.complete(1L)).isInstanceOf(ApiException.class);
+        assertThat(progressRepository.progress.status()).isEqualTo(OnboardingStatus.FAILED);
     }
 
     private OnboardingProgress completedStep2() {
@@ -212,5 +241,7 @@ class OnboardingServiceTest {
             this.schedule = schedule;
             return schedule;
         }
+
+        @Override public List<RoutineSchedule> findDueActive(Instant now) { return List.of(); }
     }
 }

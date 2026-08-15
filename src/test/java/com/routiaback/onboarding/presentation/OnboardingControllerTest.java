@@ -174,6 +174,18 @@ class OnboardingControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
+    @Test
+    void completesOnboardingAndReturnsCompletedProgress() throws Exception {
+        given(onboardingService.complete(1L)).willReturn(step3().startGenerating(NOW.plusSeconds(180)).complete(NOW.plusSeconds(181)));
+
+        mockMvc.perform(post("/api/v1/onboarding/complete"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.lastCompletedStep").value(3));
+
+        then(onboardingService).should().complete(1L);
+    }
+
     private OnboardingProgress step1() {
         return OnboardingProgress.notStarted(1L, NOW).completeStep1(NOW);
     }

@@ -3,14 +3,13 @@ package com.routiaback.routine.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routiaback.global.error.ApiException;
 import com.routiaback.global.error.ErrorCode;
 import com.routiaback.routine.application.generation.GeneratedRoutine;
 import com.routiaback.routine.application.generation.RoutineGenerationRequest;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import org.springframework.core.io.ByteArrayResource;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -22,10 +21,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class OpenAiRoutineGenerationAdapterTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper objectMapper = JsonMapper.builder()
+            .findAndAddModules()
+            .build();
     private final AtomicReference<String> authorization = new AtomicReference<>();
     private final AtomicReference<String> requestBody = new AtomicReference<>();
     private HttpServer server;
@@ -52,12 +56,12 @@ class OpenAiRoutineGenerationAdapterTest {
 
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         JsonNode body = objectMapper.readTree(requestBody.get());
-        assertThat(body.path("model").asText()).isEqualTo("gpt-5.6-luna");
-        assertThat(body.path("reasoning").path("effort").asText()).isEqualTo("low");
-        assertThat(body.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
+        assertThat(body.path("model").asString()).isEqualTo("gpt-5.6-luna");
+        assertThat(body.path("reasoning").path("effort").asString()).isEqualTo("low");
+        assertThat(body.path("text").path("format").path("type").asString()).isEqualTo("json_schema");
         assertThat(body.path("text").path("format").path("strict").asBoolean()).isTrue();
         assertThat(body.path("text").path("format").path("schema").path("additionalProperties").asBoolean()).isFalse();
-        assertThat(body.path("input").asText()).contains("2026-08-16");
+        assertThat(body.path("input").asString()).contains("2026-08-16");
         assertThat(result.directionText()).isEqualTo("가볍게 시작해요");
         assertThat(result.items()).singleElement().satisfies(item -> {
             assertThat(item.timeSlot()).isEqualTo("MORNING");
@@ -102,16 +106,22 @@ class OpenAiRoutineGenerationAdapterTest {
     }
 
     private OpenAiRoutineGenerationAdapter adapter() {
-        return new OpenAiRoutineGenerationAdapter(
-                objectMapper,
-                new PromptTemplateLoaderForTest("prompt", "routine-v1"),
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build(),
-                responsesUri,
-                "test-key",
-                "gpt-5.6-luna",
-                "low",
-                2_000,
-                Duration.ofSeconds(2));
+        try {
+            return new OpenAiRoutineGenerationAdapter(
+                    objectMapper,
+                    new PromptTemplateLoader(
+                            new ByteArrayResource("prompt".getBytes(StandardCharsets.UTF_8)),
+                            "routine-v1"),
+                    HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build(),
+                    responsesUri,
+                    "test-key",
+                    "gpt-5.6-luna",
+                    "low",
+                    2_000,
+                    Duration.ofSeconds(2));
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private RoutineGenerationRequest request() {
@@ -146,24 +156,4 @@ class OpenAiRoutineGenerationAdapterTest {
         exchange.close();
     }
 
-    private static final class PromptTemplateLoaderForTest extends PromptTemplateLoader {
-        private final String template;
-        private final String version;
-
-        private PromptTemplateLoaderForTest(String template, String version) {
-            super(template, version);
-            this.template = template;
-            this.version = version;
-        }
-
-        @Override
-        public String template() {
-            return template;
-        }
-
-        @Override
-        public String version() {
-            return version;
-        }
-    }
 }

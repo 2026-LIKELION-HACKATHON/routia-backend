@@ -12,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +29,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
 
     private static final String RESPONSES_PATH = "/v1/responses";
+    private static final Logger log = LoggerFactory.getLogger(OpenAiRoutineGenerationAdapter.class);
 
     private final ObjectMapper objectMapper;
     private final PromptTemplateLoader prompt;
@@ -37,6 +40,7 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
     private final String reasoningEffort;
     private final int maxOutputTokens;
     private final Duration requestTimeout;
+    private final boolean responseLoggingEnabled;
 
     @Autowired
     public OpenAiRoutineGenerationAdapter(
@@ -47,7 +51,8 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
             @Value("${routia.ai.model:}") String model,
             @Value("${routia.ai.reasoning-effort:low}") String reasoningEffort,
             @Value("${routia.ai.max-output-tokens:3000}") int maxOutputTokens,
-            @Value("${routia.ai.timeout-seconds:30}") long timeoutSeconds) {
+            @Value("${routia.ai.timeout-seconds:30}") long timeoutSeconds,
+            @Value("${routia.ai.log-response:false}") boolean responseLoggingEnabled) {
         this(
                 objectMapper,
                 prompt,
@@ -59,7 +64,8 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
                 model,
                 reasoningEffort,
                 maxOutputTokens,
-                Duration.ofSeconds(timeoutSeconds));
+                Duration.ofSeconds(timeoutSeconds),
+                responseLoggingEnabled);
     }
 
     OpenAiRoutineGenerationAdapter(
@@ -72,6 +78,30 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
             String reasoningEffort,
             int maxOutputTokens,
             Duration requestTimeout) {
+        this(
+                objectMapper,
+                prompt,
+                httpClient,
+                responsesUri,
+                apiKey,
+                model,
+                reasoningEffort,
+                maxOutputTokens,
+                requestTimeout,
+                false);
+    }
+
+    OpenAiRoutineGenerationAdapter(
+            ObjectMapper objectMapper,
+            PromptTemplateLoader prompt,
+            HttpClient httpClient,
+            URI responsesUri,
+            String apiKey,
+            String model,
+            String reasoningEffort,
+            int maxOutputTokens,
+            Duration requestTimeout,
+            boolean responseLoggingEnabled) {
         this.objectMapper = objectMapper;
         this.prompt = prompt;
         this.httpClient = httpClient;
@@ -81,6 +111,7 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
         this.reasoningEffort = reasoningEffort;
         this.maxOutputTokens = maxOutputTokens;
         this.requestTimeout = requestTimeout;
+        this.responseLoggingEnabled = responseLoggingEnabled;
     }
 
     @Override
@@ -100,7 +131,9 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new ApiException(ErrorCode.ROUTINE_GENERATION_FAILED);
             }
-            return parseResponse(response.body());
+            GeneratedRoutine generated = parseResponse(response.body());
+            logResponse(request, generated);
+            return generated;
         } catch (ApiException exception) {
             throw exception;
         } catch (InterruptedException exception) {
@@ -215,6 +248,26 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
             throw exception;
         } catch (JacksonException exception) {
             throw new ApiException(ErrorCode.AI_RESPONSE_INVALID, exception);
+        }
+    }
+
+    private void logResponse(RoutineGenerationRequest request, GeneratedRoutine generated) {
+        if (!responseLoggingEnabled) {
+            return;
+        }
+        try {
+            log.info(
+                    "OpenAI routine response received. model={} promptVersion={} routineDate={} response={}",
+                    model,
+                    prompt.version(),
+                    request.routineDate(),
+                    objectMapper.writeValueAsString(generated));
+        } catch (JacksonException exception) {
+            log.warn(
+                    "OpenAI routine response logging failed. model={} promptVersion={} routineDate={}",
+                    model,
+                    prompt.version(),
+                    request.routineDate());
         }
     }
 

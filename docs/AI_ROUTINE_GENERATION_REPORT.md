@@ -37,6 +37,7 @@
 - 실제 연동 `AI_PROVIDER=openai`: OpenAI Responses API를 호출한다.
 - 필수 설정: `OPENAI_API_KEY`, `AI_MODEL=gpt-5.6-luna`
 - 선택 설정: `OPENAI_BASE_URL`, `AI_REASONING_EFFORT`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_SECONDS`
+- 로컬 응답 확인: `AI_LOG_RESPONSE=true`로 실행하면 검증된 OpenAI JSON 응답 전문이 IntelliJ 콘솔에 출력된다. 입력 개인정보는 출력하지 않는다.
 
 ## 실제 연동 검증
 

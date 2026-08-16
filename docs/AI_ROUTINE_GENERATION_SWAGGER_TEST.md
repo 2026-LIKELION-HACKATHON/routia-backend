@@ -8,6 +8,7 @@
 AI_PROVIDER=openai
 OPENAI_API_KEY=발급받은_API_KEY
 AI_MODEL=gpt-5.6-luna
+AI_LOG_RESPONSE=true
 AI_PROMPT_VERSION=routine-v1
 ROUTINE_GENERATION_SCHEDULER_DELAY_MS=60000
 ```
@@ -64,6 +65,12 @@ Weather 입력에 좌표가 필요하므로 `PATCH /api/v1/users/{id}/profile`�
 - `prompt_version`: `routine-v1`
 - personalization/performance snapshot 존재
 - `routine_items.sort_order`: 1부터 순서대로 저장
+
+IntelliJ Run 콘솔에서 다음 로그의 `response` 값으로 OpenAI가 반환한 전체 JSON을 확인한다.
+
+```text
+OpenAI routine response received. model=gpt-5.6-luna promptVersion=routine-v1 routineDate=... response={...}
+```
 
 ## 5. 실패 확인
 

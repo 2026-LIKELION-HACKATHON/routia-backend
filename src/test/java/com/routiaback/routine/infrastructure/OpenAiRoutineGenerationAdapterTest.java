@@ -21,10 +21,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+@ExtendWith(OutputCaptureExtension.class)
 class OpenAiRoutineGenerationAdapterTest {
 
     private final ObjectMapper objectMapper = JsonMapper.builder()
@@ -105,7 +109,22 @@ class OpenAiRoutineGenerationAdapterTest {
                 });
     }
 
+    @Test
+    void logsValidatedOpenAiResponseWhenExplicitlyEnabled(CapturedOutput output) {
+        adapter(true).generate(request());
+
+        assertThat(output).contains(
+                "OpenAI routine response received",
+                "model=gpt-5.6-luna",
+                "routineDate=2026-08-16",
+                "response={\"directionText\":\"가볍게 시작해요\"");
+    }
+
     private OpenAiRoutineGenerationAdapter adapter() {
+        return adapter(false);
+    }
+
+    private OpenAiRoutineGenerationAdapter adapter(boolean responseLoggingEnabled) {
         try {
             return new OpenAiRoutineGenerationAdapter(
                     objectMapper,
@@ -118,7 +137,8 @@ class OpenAiRoutineGenerationAdapterTest {
                     "gpt-5.6-luna",
                     "low",
                     2_000,
-                    Duration.ofSeconds(2));
+                    Duration.ofSeconds(2),
+                    responseLoggingEnabled);
         } catch (IOException exception) {
             throw new IllegalStateException(exception);
         }

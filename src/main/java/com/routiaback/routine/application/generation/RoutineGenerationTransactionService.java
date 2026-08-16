@@ -18,7 +18,14 @@ public class RoutineGenerationTransactionService {
             com.routiaback.personalization.domain.RoutineDifficulty difficulty,
             com.routiaback.personalization.domain.RoutineTimePreference timePreference,
             Instant notificationAt,Instant now){
-        return routines.findByUserIdAndRoutineDate(userId,date).map(r->new Reservation(r,false))
+        return routines.findByUserIdAndRoutineDate(userId,date).map(r -> {
+                    if (r.status() == RoutineStatus.FAILED) {
+                        DailyRoutine retrying = r.retryGenerating(
+                                difficulty, timePreference, notificationAt, now);
+                        return new Reservation(routines.save(retrying), true);
+                    }
+                    return new Reservation(r, false);
+                })
                 .orElseGet(()->new Reservation(routines.save(DailyRoutine.generating(userId,date,difficulty,timePreference,notificationAt,now)),true));
     }
 

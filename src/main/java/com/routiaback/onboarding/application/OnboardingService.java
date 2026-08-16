@@ -21,6 +21,7 @@ import java.time.ZonedDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.routiaback.routine.application.generation.RoutineGenerationService;
+import com.routiaback.routine.application.generation.GeneratedRoutine;
 import com.routiaback.routine.domain.RoutineGenerationType;
 import com.routiaback.onboarding.domain.OnboardingStatus;
 
@@ -95,22 +96,37 @@ public class OnboardingService {
         return currentProgress(userId);
     }
 
-    public OnboardingProgress complete(Long userId) {
+    public CompleteResult complete(Long userId) {
         OnboardingProgress progress = currentProgress(userId);
-        if (progress.status() == OnboardingStatus.COMPLETED) return progress;
-        OnboardingProgress generating = progressRepository.save(progress.startGenerating(clock.instant()));
         LocalDate today = clock.instant().atZone(SCHEDULE_ZONE).toLocalDate();
+        if (progress.status() == OnboardingStatus.COMPLETED) {
+            return completedResult(progress, routineGenerationService.generate(
+                    userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null));
+        }
+        OnboardingProgress generating = progressRepository.save(progress.startGenerating(clock.instant()));
         try {
             RoutineGenerationService.GenerationOutcome outcome = routineGenerationService.generate(
                     userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null);
-            if (outcome.status() != com.routiaback.routine.domain.RoutineStatus.READY) {
-                throw new com.routiaback.global.error.ApiException(
-                        com.routiaback.global.error.ErrorCode.ROUTINE_GENERATION_FAILED);
-            }
-            return progressRepository.save(generating.complete(clock.instant()));
+            requireReadyRoutine(outcome);
+            OnboardingProgress completed = progressRepository.save(generating.complete(clock.instant()));
+            return new CompleteResult(completed, outcome.routineId(), outcome.routine());
         } catch (RuntimeException exception) {
             progressRepository.save(generating.fail(clock.instant()));
             throw exception;
+        }
+    }
+
+    private CompleteResult completedResult(OnboardingProgress progress,
+            RoutineGenerationService.GenerationOutcome outcome) {
+        requireReadyRoutine(outcome);
+        return new CompleteResult(progress, outcome.routineId(), outcome.routine());
+    }
+
+    private void requireReadyRoutine(RoutineGenerationService.GenerationOutcome outcome) {
+        if (outcome.status() != com.routiaback.routine.domain.RoutineStatus.READY
+                || outcome.routine() == null) {
+            throw new com.routiaback.global.error.ApiException(
+                    com.routiaback.global.error.ErrorCode.ROUTINE_GENERATION_FAILED);
         }
     }
 
@@ -118,5 +134,7 @@ public class OnboardingService {
         return progressRepository.findByUserId(userId)
                 .orElseGet(() -> OnboardingProgress.notStarted(userId, clock.instant()));
     }
+
+    public record CompleteResult(OnboardingProgress progress, Long routineId, GeneratedRoutine routine) { }
 
 }

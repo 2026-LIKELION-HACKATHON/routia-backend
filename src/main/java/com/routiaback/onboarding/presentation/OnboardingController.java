@@ -96,10 +96,11 @@ public class OnboardingController {
 
     @PostMapping("/complete")
     @Operation(summary = "온보딩 완료 및 최초 루틴 생성",
-            description = "1~3단계 완료 후 오늘의 AI 루틴을 즉시 생성합니다. 최초 루틴은 알림 발송 대상이 아닙니다.")
-    @OnboardingApiResponses
-    public ApiResponse<ProgressResponse> complete(@AuthenticationPrincipal Long userId) {
-        return ApiResponse.success(ProgressResponse.from(onboardingService.complete(userId)));
+            description = "1~3단계 완료 후 오늘의 AI 루틴을 즉시 생성하고 전체 결과를 반환합니다. "
+                    + "이미 생성된 경우 AI를 다시 호출하지 않고 저장된 결과를 반환합니다.")
+    @OnboardingCompleteApiResponses
+    public ApiResponse<CompleteResponse> complete(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.success(CompleteResponse.from(onboardingService.complete(userId)));
     }
 
     @Schema(name = "OnboardingStep1Request")
@@ -158,6 +159,56 @@ public class OnboardingController {
         }
     }
 
+    @Schema(name = "OnboardingCompleteResponse",
+            description = "온보딩 완료 상태와 오늘 생성된 AI 루틴을 함께 반환합니다.")
+    public record CompleteResponse(
+            OnboardingStatus status,
+            int lastCompletedStep,
+            Instant step1CompletedAt,
+            Instant step2CompletedAt,
+            Instant step3CompletedAt,
+            Instant completedAt,
+            GeneratedRoutineResponse routine
+    ) {
+        static CompleteResponse from(OnboardingService.CompleteResult result) {
+            OnboardingProgress progress = result.progress();
+            return new CompleteResponse(progress.status(), progress.lastCompletedStep(),
+                    progress.step1CompletedAt(), progress.step2CompletedAt(),
+                    progress.step3CompletedAt(), progress.completedAt(),
+                    GeneratedRoutineResponse.from(result.routineId(), result.routine()));
+        }
+    }
+
+    @Schema(name = "OnboardingGeneratedRoutineResponse")
+    public record GeneratedRoutineResponse(
+            Long routineId,
+            String directionText,
+            String homeComment,
+            List<GeneratedRoutineItemResponse> items
+    ) {
+        static GeneratedRoutineResponse from(Long routineId,
+                com.routiaback.routine.application.generation.GeneratedRoutine routine) {
+            return new GeneratedRoutineResponse(routineId, routine.directionText(), routine.homeComment(),
+                    routine.items().stream().map(GeneratedRoutineItemResponse::from).toList());
+        }
+    }
+
+    @Schema(name = "OnboardingGeneratedRoutineItemResponse")
+    public record GeneratedRoutineItemResponse(
+            String timeSlot,
+            String category,
+            String title,
+            String detail,
+            String effectCode,
+            String expectedEffect
+    ) {
+        static GeneratedRoutineItemResponse from(
+                com.routiaback.routine.application.generation.GeneratedRoutine.GeneratedItem item) {
+            return new GeneratedRoutineItemResponse(item.timeSlot(), item.category(), item.title(),
+                    item.detail(), item.effectCode(), item.expectedEffect());
+        }
+    }
+
     @java.lang.annotation.Target({java.lang.annotation.ElementType.METHOD})
     @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
     @ApiResponses({
@@ -173,5 +224,28 @@ public class OnboardingController {
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     private @interface OnboardingApiResponses {
+    }
+
+    @java.lang.annotation.Target({java.lang.annotation.ElementType.METHOD})
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200", description = "온보딩 완료 및 AI 루틴 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401", description = "인증 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404", description = "사용자 위치 정보 없음",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409", description = "온보딩 1~3단계 미완료",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "502", description = "AI 루틴 생성 실패",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "503", description = "AI Provider 설정 필요",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    private @interface OnboardingCompleteApiResponses {
     }
 }

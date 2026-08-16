@@ -32,4 +32,14 @@ public record DailyRoutine(Long id, Long userId, Long weatherSnapshotId, LocalDa
                 personalizationSnapshot, performanceSnapshot, errorCode, aiModel, promptVersion,
                 generatedAt, notificationScheduledAt, createdAt, now);
     }
+
+    public DailyRoutine retryGenerating(RoutineDifficulty difficulty,
+            RoutineTimePreference timePreference, Instant notificationAt, Instant now) {
+        if (status != RoutineStatus.FAILED) {
+            throw new IllegalStateException("only failed routine can be retried");
+        }
+        return new DailyRoutine(id, userId, null, routineDate, RoutineStatus.GENERATING,
+                null, null, difficulty, timePreference, null, null, null,
+                null, null, null, notificationAt, createdAt, now);
+    }
 }

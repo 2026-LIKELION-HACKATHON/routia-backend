@@ -15,6 +15,9 @@
 - OpenAI Responses API와 `gpt-5.6-luna`를 실제 Provider로 연결했다.
 - Structured Outputs의 strict JSON Schema로 응답 필드, enum, item 개수를 제한한다.
 - Provider HTTP 오류, timeout, 미완료·거절·비정상 JSON은 루틴 생성 실패로 처리하며 Provider 응답 본문과 API Key를 노출하지 않는다.
+- `/api/v1/onboarding/complete` 성공 응답에서 생성된 `directionText`, `homeComment`, Routine Item 전체 값을 반환한다.
+- 같은 날짜의 `READY` 루틴은 AI를 중복 호출하지 않고 DB 저장값을 반환하며, `FAILED` 루틴은 동일 행을 재사용해 재시도한다.
+- 사용자 위·경도 누락은 Routine 행을 예약하기 전에 `USER_LOCATION_NOT_FOUND`로 차단한다.
 
 ## 트랜잭션 경계
 

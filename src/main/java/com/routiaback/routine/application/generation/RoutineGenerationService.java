@@ -29,16 +29,18 @@ public class RoutineGenerationService {
 
     public GenerationOutcome generate(Long userId,LocalDate date,RoutineGenerationType type,Instant notificationAt){
         Optional<DailyRoutine> existing=routines.findByUserIdAndRoutineDate(userId,date);
-        if(existing.isPresent()&&(existing.get().status()==RoutineStatus.READY||existing.get().status()==RoutineStatus.GENERATING))return new GenerationOutcome(existing.get().id(),existing.get().status(),false);
+        if(existing.isPresent()&&(existing.get().status()==RoutineStatus.READY||existing.get().status()==RoutineStatus.GENERATING))return outcome(existing.get(),false);
         Instant now=clock.instant();
         ProfileResult profile=ProfileResult.from(profiles.findByUserId(userId).orElseThrow(()->new ApiException(ErrorCode.ROUTINE_GENERATION_INPUT_INVALID)));
         UserPreference preference=needs.findPreferenceByUserId(userId).orElseThrow(()->new ApiException(ErrorCode.ROUTINE_GENERATION_INPUT_INVALID));
         NeedsResult need=NeedsResult.from(preference,needs.findBodyConcernCodes(userId),needs.findSkinConcernCodes(userId));
         if(preference.routineDifficulty()==null)throw new ApiException(ErrorCode.ROUTINE_GENERATION_INPUT_INVALID);
-        UserLocation location=locations.findByUserId(userId).orElseThrow(()->new ApiException(ErrorCode.USER_LOCATION_NOT_FOUND));
+        UserLocation location=locations.findByUserId(userId)
+                .filter(value -> value.latitude() != null && value.longitude() != null)
+                .orElseThrow(()->new ApiException(ErrorCode.USER_LOCATION_NOT_FOUND));
         RoutineGenerationTransactionService.Reservation reservation;
-        try{reservation=transactions.reserve(userId,date,preference.routineDifficulty(),preference.routineTimePreference(),type==RoutineGenerationType.INITIAL_ONBOARDING?null:notificationAt,now);}catch(DataIntegrityViolationException ex){DailyRoutine found=routines.findByUserIdAndRoutineDate(userId,date).orElseThrow(()->ex);return new GenerationOutcome(found.id(),found.status(),false);}
-        DailyRoutine routine=reservation.routine(); if(!reservation.created())return new GenerationOutcome(routine.id(),routine.status(),false);
+        try{reservation=transactions.reserve(userId,date,preference.routineDifficulty(),preference.routineTimePreference(),type==RoutineGenerationType.INITIAL_ONBOARDING?null:notificationAt,now);}catch(DataIntegrityViolationException ex){DailyRoutine found=routines.findByUserIdAndRoutineDate(userId,date).orElseThrow(()->ex);return outcome(found,false);}
+        DailyRoutine routine=reservation.routine(); if(!reservation.created())return outcome(routine,false);
         try{
             WeatherInfo weather=weatherClient.fetchCurrentWeather(location.latitude().doubleValue(),location.longitude().doubleValue());
             RoutineGenerationRequest.PerformanceInput performance=performance(userId,date);
@@ -46,7 +48,7 @@ public class RoutineGenerationService {
             GeneratedRoutine generated=ai.generate(request); validator.validate(generated,preference.routineDifficulty());
             WeatherSnapshot snapshot=new WeatherSnapshot(null,userId,date,location.regionSido(),location.regionSigungu(),location.latitude(),location.longitude(),BigDecimal.valueOf(weather.temperature()),BigDecimal.valueOf(weather.uvIndex()),WeatherCodeMapper.toDescription(weather.weatherCode()),"OPEN_METEO",now,now);
             DailyRoutine ready=transactions.complete(routine,snapshot,generated,preference.routineDifficulty(),preference.routineTimePreference(),json(personalization(request)),json(performance),ai.model(),ai.promptVersion(),clock.instant());
-            return new GenerationOutcome(ready.id(),ready.status(),true);
+            return new GenerationOutcome(ready.id(),ready.status(),true,generated);
         }catch(RuntimeException ex){transactions.fail(routine.id(),errorCode(ex),clock.instant());throw ex instanceof ApiException?ex:new ApiException(ErrorCode.ROUTINE_GENERATION_FAILED,ex);}
     }
 
@@ -68,5 +70,17 @@ public class RoutineGenerationService {
     }
     private Map<String,Double> rates(List<RoutineItem> all,java.util.function.Function<RoutineItem,String> key){return all.stream().collect(Collectors.groupingBy(key,Collectors.collectingAndThen(Collectors.toList(),l->l.isEmpty()?0:l.stream().filter(RoutineItem::completed).count()/(double)l.size())));}
     private String extreme(Map<String,Double> rates,boolean max){return rates.entrySet().stream().min((a,b)->max?Double.compare(b.getValue(),a.getValue()):Double.compare(a.getValue(),b.getValue())).map(Map.Entry::getKey).orElse(null);}
-    public record GenerationOutcome(Long routineId,RoutineStatus status,boolean generated){ }
+    private GenerationOutcome outcome(DailyRoutine routine,boolean generated){
+        GeneratedRoutine result=null;
+        if(routine.status()==RoutineStatus.READY){
+            List<GeneratedRoutine.GeneratedItem> storedItems=items.findAllByRoutineIdOrderBySortOrder(routine.id()).stream()
+                    .map(item->new GeneratedRoutine.GeneratedItem(item.timeSlot(),item.category(),item.title(),item.detail(),item.effectCode(),item.expectedEffect()))
+                    .toList();
+            result=new GeneratedRoutine(routine.directionText(),routine.homeComment(),storedItems);
+        }
+        return new GenerationOutcome(routine.id(),routine.status(),generated,result);
+    }
+    public record GenerationOutcome(Long routineId,RoutineStatus status,boolean generated,GeneratedRoutine routine){
+        public GenerationOutcome(Long routineId,RoutineStatus status,boolean generated){this(routineId,status,generated,null);}
+    }
 }

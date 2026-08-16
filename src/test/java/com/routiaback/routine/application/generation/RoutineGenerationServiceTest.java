@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 import tools.jackson.databind.ObjectMapper;
+import com.routiaback.global.error.ApiException;
+import com.routiaback.global.error.ErrorCode;
 import com.routiaback.personalization.application.port.*;
 import com.routiaback.personalization.domain.*;
 import com.routiaback.routine.application.port.*;
@@ -40,7 +42,9 @@ class RoutineGenerationServiceTest {
         ArgumentCaptor<String> personalization=ArgumentCaptor.forClass(String.class);ArgumentCaptor<String> performance=ArgumentCaptor.forClass(String.class);verify(tx).complete(eq(generating),any(),eq(generated),eq(RoutineDifficulty.SIMPLE),eq(RoutineTimePreference.MORNING),personalization.capture(),performance.capture(),eq("model-x"),eq("routine-v1"),any());assertThat(personalization.getValue()).contains("BUILD_HABIT","FATIGUE","SENSITIVE");assertThat(performance.getValue()).contains("recentAverageRate");
     }
 
-    @Test void skipsAiWhenRoutineAlreadyExists(){DailyRoutine ready=generating.ready(2L,"d","h",RoutineDifficulty.SIMPLE,RoutineTimePreference.MORNING,"{}","{}","m","v",NOW);given(routines.findByUserIdAndRoutineDate(1L,DATE)).willReturn(Optional.of(ready));var result=service.generate(1L,DATE,RoutineGenerationType.SCHEDULED_DAILY,NOW);assertThat(result.generated()).isFalse();verifyNoInteractions(ai,weather);}
+    @Test void returnsStoredAiResultWithoutRegenerationWhenReadyRoutineAlreadyExists(){DailyRoutine ready=generating.ready(2L,"기존 방향","기존 코멘트",RoutineDifficulty.SIMPLE,RoutineTimePreference.MORNING,"{}","{}","m","v",NOW);given(routines.findByUserIdAndRoutineDate(1L,DATE)).willReturn(Optional.of(ready));given(items.findAllByRoutineIdOrderBySortOrder(7L)).willReturn(List.of(new RoutineItem(11L,7L,"MORNING","SKIN","기존 세안","상세","CLEAN","청결",1,false,null,NOW,NOW)));var result=service.generate(1L,DATE,RoutineGenerationType.SCHEDULED_DAILY,NOW);assertThat(result.generated()).isFalse();assertThat(result.routine().directionText()).isEqualTo("기존 방향");assertThat(result.routine().items()).singleElement().extracting(GeneratedRoutine.GeneratedItem::detail).isEqualTo("상세");verifyNoInteractions(ai,weather);}
+
+    @Test void rejectsMissingCoordinatesBeforeRoutineReservation(){given(locations.findByUserId(1L)).willReturn(Optional.of(new UserLocation(null,null,"서울","강남")));assertThatThrownBy(()->service.generate(1L,DATE,RoutineGenerationType.INITIAL_ONBOARDING,null)).isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.USER_LOCATION_NOT_FOUND);verifyNoInteractions(tx,weather,ai);}
 
     @Test void marksGeneratingRoutineFailedWhenAiFails(){given(ai.generate(any())).willThrow(new IllegalStateException("timeout"));assertThatThrownBy(()->service.generate(1L,DATE,RoutineGenerationType.INITIAL_ONBOARDING,null)).isInstanceOf(com.routiaback.global.error.ApiException.class);verify(tx).fail(7L,"EXTERNAL_AI_ERROR",NOW);}
 }

@@ -14,6 +14,7 @@ import com.routiaback.notification.application.port.RoutineScheduleRepositoryPor
 import com.routiaback.notification.domain.RoutineSchedule;
 import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
 import com.routiaback.routine.application.generation.RoutineGenerationService;
+import com.routiaback.routine.application.generation.GeneratedRoutine;
 import com.routiaback.routine.domain.RoutineStatus;
 import com.routiaback.onboarding.application.command.Step1Command;
 import com.routiaback.onboarding.application.command.Step2Command;
@@ -176,15 +177,32 @@ class OnboardingServiceTest {
     @Test
     void completesOnboardingOnlyAfterInitialRoutineSucceeds() {
         progressRepository.progress = completedStep2().completeStep3(NOW);
+        GeneratedRoutine generated = generatedRoutine();
         given(routineGenerationService.generate(any(), any(), any(), any()))
-                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, true));
+                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, true, generated));
 
-        OnboardingProgress result = service.complete(1L);
+        OnboardingService.CompleteResult result = service.complete(1L);
 
-        assertThat(result.status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(result.progress().status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(result.routine()).isEqualTo(generated);
         verify(routineGenerationService).generate(org.mockito.ArgumentMatchers.eq(1L), any(),
                 org.mockito.ArgumentMatchers.eq(com.routiaback.routine.domain.RoutineGenerationType.INITIAL_ONBOARDING),
                 org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void returnsStoredRoutineWhenAlreadyCompletedWithoutRestartingProgress() {
+        progressRepository.progress = completedStep2().completeStep3(NOW)
+                .startGenerating(NOW.plusSeconds(1)).complete(NOW.plusSeconds(2));
+        GeneratedRoutine stored = generatedRoutine();
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, false, stored));
+
+        OnboardingService.CompleteResult result = service.complete(1L);
+
+        assertThat(result.progress().status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(result.routine()).isEqualTo(stored);
+        assertThat(progressRepository.progress.status()).isEqualTo(OnboardingStatus.COMPLETED);
     }
 
     @Test
@@ -207,6 +225,12 @@ class OnboardingServiceTest {
 
     private Step3Command step3Command(LocalTime notificationTime) {
         return new Step3Command(RoutineTimePreference.MORNING, RoutineDifficulty.SIMPLE, notificationTime);
+    }
+
+    private GeneratedRoutine generatedRoutine() {
+        return new GeneratedRoutine("방향", "홈 코멘트", List.of(
+                new GeneratedRoutine.GeneratedItem(
+                        "MORNING", "SKIN", "세안", "미온수로 세안", "CLEAN", "피부 청결")));
     }
 
     private static class FakeProgressRepository implements OnboardingProgressRepositoryPort {

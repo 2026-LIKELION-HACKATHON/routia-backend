@@ -15,6 +15,7 @@ import com.routiaback.onboarding.application.command.Step1Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
 import com.routiaback.onboarding.domain.OnboardingProgress;
+import com.routiaback.routine.application.generation.GeneratedRoutine;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -175,13 +176,27 @@ class OnboardingControllerTest {
     }
 
     @Test
-    void completesOnboardingAndReturnsCompletedProgress() throws Exception {
-        given(onboardingService.complete(1L)).willReturn(step3().startGenerating(NOW.plusSeconds(180)).complete(NOW.plusSeconds(181)));
+    void completesOnboardingAndReturnsGeneratedAiRoutine() throws Exception {
+        OnboardingProgress completed = step3().startGenerating(NOW.plusSeconds(180)).complete(NOW.plusSeconds(181));
+        GeneratedRoutine routine = new GeneratedRoutine("오늘의 방향", "홈 코멘트", List.of(
+                new GeneratedRoutine.GeneratedItem(
+                        "MORNING", "SKIN", "미온수 세안", "부드럽게 세안하세요.", "CLEAN", "피부 청결")));
+        given(onboardingService.complete(1L)).willReturn(
+                new OnboardingService.CompleteResult(completed, 10L, routine));
 
         mockMvc.perform(post("/api/v1/onboarding/complete"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.data.lastCompletedStep").value(3));
+                .andExpect(jsonPath("$.data.lastCompletedStep").value(3))
+                .andExpect(jsonPath("$.data.routine.routineId").value(10))
+                .andExpect(jsonPath("$.data.routine.directionText").value("오늘의 방향"))
+                .andExpect(jsonPath("$.data.routine.homeComment").value("홈 코멘트"))
+                .andExpect(jsonPath("$.data.routine.items[0].timeSlot").value("MORNING"))
+                .andExpect(jsonPath("$.data.routine.items[0].category").value("SKIN"))
+                .andExpect(jsonPath("$.data.routine.items[0].title").value("미온수 세안"))
+                .andExpect(jsonPath("$.data.routine.items[0].detail").value("부드럽게 세안하세요."))
+                .andExpect(jsonPath("$.data.routine.items[0].effectCode").value("CLEAN"))
+                .andExpect(jsonPath("$.data.routine.items[0].expectedEffect").value("피부 청결"));
 
         then(onboardingService).should().complete(1L);
     }

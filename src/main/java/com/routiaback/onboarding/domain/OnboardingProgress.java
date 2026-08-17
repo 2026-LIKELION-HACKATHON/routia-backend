@@ -29,7 +29,16 @@ public record OnboardingProgress(
                 null, null, null, null, now);
     }
 
+    public OnboardingProgress completeStep0(Instant now) {
+        return new OnboardingProgress(userId, statusAfterStepSubmission(), lastCompletedStep,
+                step1CompletedAt, step2CompletedAt, step3CompletedAt,
+                completedAtAfterStepSubmission(), now);
+    }
+
     public OnboardingProgress completeStep1(Instant now) {
+        if (status == OnboardingStatus.NOT_STARTED) {
+            throw new ApiException(ErrorCode.ONBOARDING_STEP_ORDER_INVALID);
+        }
         return new OnboardingProgress(userId, statusAfterStepSubmission(),
                 Math.max(lastCompletedStep, 1), firstCompletion(step1CompletedAt, now),
                 step2CompletedAt, step3CompletedAt, completedAtAfterStepSubmission(), now);
@@ -103,7 +112,6 @@ public record OnboardingProgress(
                 || (lastCompletedStep >= 2) != (step2CompletedAt != null)
                 || (lastCompletedStep >= 3) != (step3CompletedAt != null)
                 || status == OnboardingStatus.NOT_STARTED && lastCompletedStep != 0
-                || status == OnboardingStatus.IN_PROGRESS && lastCompletedStep == 0
                 || (status == OnboardingStatus.GENERATING
                     || status == OnboardingStatus.COMPLETED
                     || status == OnboardingStatus.FAILED) && lastCompletedStep != 3

@@ -33,6 +33,14 @@ public record User(
 		return new User(id, email, passwordHash, name, accountStatus, emailVerifiedAt, loggedInAt, createdAt, loggedInAt, deletedAt);
 	}
 
+	public User rename(String newName, Instant now) {
+		if (newName == null || newName.isBlank() || newName.trim().length() > 50) {
+			throw new ApiException(ErrorCode.INVALID_PROFILE_DATA);
+		}
+		return new User(id, email, passwordHash, newName.trim(), accountStatus, emailVerifiedAt,
+			lastLoginAt, createdAt, now, deletedAt);
+	}
+
 	public void validateLoginAllowed() {
 		if (deletedAt != null || accountStatus == AccountStatus.WITHDRAWN) {
 			throw new ApiException(ErrorCode.ACCOUNT_WITHDRAWN);

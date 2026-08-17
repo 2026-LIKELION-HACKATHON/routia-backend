@@ -4,6 +4,7 @@ import com.routiaback.notification.application.port.RoutineScheduleRepositoryPor
 import com.routiaback.notification.domain.RoutineSchedule;
 import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
 import com.routiaback.onboarding.application.command.Step1Command;
+import com.routiaback.onboarding.application.command.Step0Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
 import com.routiaback.onboarding.application.port.OnboardingProgressRepositoryPort;
@@ -14,10 +15,7 @@ import com.routiaback.personalization.application.command.UpdateProfileCommand;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.routiaback.routine.application.generation.RoutineGenerationService;
@@ -54,14 +52,24 @@ public class OnboardingService {
     }
 
     @Transactional
+    public OnboardingProgress completeStep0(Long userId, Step0Command command) {
+        OnboardingProgress progress = currentProgress(userId);
+        personalizationService.updateUserName(userId, userId, command.userName());
+        if (command.profileImage() != null) {
+            personalizationService.uploadProfileImage(userId, userId, command.profileImage());
+        }
+        return progressRepository.save(progress.completeStep0(clock.instant()));
+    }
+
+    @Transactional
     public OnboardingProgress completeStep1(Long userId, Step1Command command) {
         OnboardingProgress progress = currentProgress(userId);
+        OnboardingProgress completed = progress.completeStep1(clock.instant());
         personalizationService.updateProfile(userId, userId, new UpdateProfileCommand(
                 command.height(), command.weight(), command.gender(), command.ageGroup(),
-                null, null, null, null, null));
-        personalizationService.updateNeeds(userId, userId, new UpdateNeedsCommand(
-                command.bodyGoal(), command.bodyConcerns(), null, null, null, null));
-        return progressRepository.save(progress.completeStep1(clock.instant()));
+                command.regionSido(), command.regionSigungu(), command.latitude(), command.longitude(),
+                command.locationSource()));
+        return progressRepository.save(completed);
     }
 
     @Transactional
@@ -69,25 +77,17 @@ public class OnboardingService {
         OnboardingProgress progress = currentProgress(userId);
         OnboardingProgress completed = progress.completeStep2(clock.instant());
         personalizationService.updateNeeds(userId, userId, new UpdateNeedsCommand(
-                null, null, command.skinType(), command.skinConcerns(), null, null));
+                null, command.bodyConcerns(), command.skinType(), command.skinConcerns(), null, null,
+                command.bodyGoals(), command.ownedTools()));
         return progressRepository.save(completed);
     }
 
     @Transactional
     public OnboardingProgress completeStep3(Long userId, Step3Command command) {
         OnboardingProgress progress = currentProgress(userId);
-        Instant now = clock.instant();
-        OnboardingProgress completed = progress.completeStep3(now);
+        OnboardingProgress completed = progress.completeStep3(clock.instant());
         personalizationService.updateNeeds(userId, userId, new UpdateNeedsCommand(
                 null, null, null, null, command.routineTimePreference(), command.routineDifficulty()));
-
-        Instant nextGenerationAt = scheduleCalculator.next(command.notificationTime(),
-                RoutineSchedule.DEFAULT_TIMEZONE, now).generationAt();
-        RoutineSchedule schedule = scheduleRepository.findByUserId(userId)
-                .map(current -> current.update(command.notificationTime(), nextGenerationAt, now))
-                .orElseGet(() -> RoutineSchedule.create(
-                        userId, command.notificationTime(), nextGenerationAt, now));
-        scheduleRepository.save(schedule);
         return progressRepository.save(completed);
     }
 
@@ -100,14 +100,17 @@ public class OnboardingService {
         OnboardingProgress progress = currentProgress(userId);
         LocalDate today = clock.instant().atZone(SCHEDULE_ZONE).toLocalDate();
         if (progress.status() == OnboardingStatus.COMPLETED) {
-            return completedResult(progress, routineGenerationService.generate(
+            CompleteResult result = completedResult(progress, routineGenerationService.generate(
                     userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null));
+            ensureGenerationSchedule(userId);
+            return result;
         }
         OnboardingProgress generating = progressRepository.save(progress.startGenerating(clock.instant()));
         try {
             RoutineGenerationService.GenerationOutcome outcome = routineGenerationService.generate(
                     userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null);
             requireReadyRoutine(outcome);
+            ensureGenerationSchedule(userId);
             OnboardingProgress completed = progressRepository.save(generating.complete(clock.instant()));
             return new CompleteResult(completed, outcome.routineId(), outcome.routine());
         } catch (RuntimeException exception) {
@@ -133,6 +136,13 @@ public class OnboardingService {
     private OnboardingProgress currentProgress(Long userId) {
         return progressRepository.findByUserId(userId)
                 .orElseGet(() -> OnboardingProgress.notStarted(userId, clock.instant()));
+    }
+
+    private void ensureGenerationSchedule(Long userId) {
+        if (scheduleRepository.findByUserId(userId).isPresent()) return;
+        Instant now = clock.instant();
+        Instant next = scheduleCalculator.nextDefault(RoutineSchedule.DEFAULT_TIMEZONE, now).generationAt();
+        scheduleRepository.save(RoutineSchedule.createWithoutNotification(userId, next, now));
     }
 
     public record CompleteResult(OnboardingProgress progress, Long routineId, GeneratedRoutine routine) { }

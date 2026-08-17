@@ -16,7 +16,7 @@ class RoutineScheduleJpaEntity {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(name = "notification_time", nullable = false)
+    @Column(name = "notification_time")
     private LocalTime notificationTime;
 
     @Column(name = "timezone", nullable = false, length = 50)

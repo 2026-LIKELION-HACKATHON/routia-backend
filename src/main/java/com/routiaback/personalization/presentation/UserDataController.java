@@ -145,20 +145,23 @@ public class UserDataController {
     @Schema(name = "NeedsUpdateRequest", description = "고민 목록은 전달 시 전체 교체되며 빈 배열로 모두 제거할 수 있습니다.")
     public record NeedsUpdateRequest(
             BodyGoal bodyGoal,
+            @Size(max = 3) List<@jakarta.validation.constraints.NotNull BodyGoal> bodyGoals,
             List<@NotBlank @Size(max = 30) String> bodyConcerns,
             SkinType skinType,
             List<@NotBlank @Size(max = 30) String> skinConcerns,
+            @Size(max = 4) List<@NotBlank @Size(max = 40) String> ownedTools,
             RoutineTimePreference routineTimePreference,
             RoutineDifficulty routineDifficulty
     ) {
         UpdateNeedsCommand toCommand() {
             return new UpdateNeedsCommand(bodyGoal, bodyConcerns, skinType, skinConcerns,
-                    routineTimePreference, routineDifficulty);
+                    routineTimePreference, routineDifficulty, bodyGoals, ownedTools);
         }
     }
 
     @Schema(name = "ProfileResponse")
     public record ProfileResponse(
+            String userName,
             BigDecimal height,
             BigDecimal weight,
             Gender gender,
@@ -173,7 +176,7 @@ public class UserDataController {
             Instant locationUpdatedAt
     ) {
         static ProfileResponse from(ProfileResult result) {
-            return new ProfileResponse(result.height(), result.weight(), result.gender(), result.ageGroup(),
+            return new ProfileResponse(result.userName(), result.height(), result.weight(), result.gender(), result.ageGroup(),
                     result.profileImage(), result.regionSido(), result.regionSigungu(), result.latitude(),
                     result.longitude(), result.locationSource(), result.locationUpdatedAt());
         }
@@ -182,15 +185,17 @@ public class UserDataController {
     @Schema(name = "NeedsResponse")
     public record NeedsResponse(
             BodyGoal bodyGoal,
+            List<BodyGoal> bodyGoals,
             List<String> bodyConcerns,
             SkinType skinType,
             List<String> skinConcerns,
+            List<String> ownedTools,
             RoutineTimePreference routineTimePreference,
             RoutineDifficulty routineDifficulty
     ) {
         static NeedsResponse from(NeedsResult result) {
-            return new NeedsResponse(result.bodyGoal(), result.bodyConcerns(), result.skinType(),
-                    result.skinConcerns(), result.routineTimePreference(), result.routineDifficulty());
+            return new NeedsResponse(result.bodyGoal(), result.bodyGoals(), result.bodyConcerns(), result.skinType(),
+                    result.skinConcerns(), result.ownedTools(), result.routineTimePreference(), result.routineDifficulty());
         }
     }
 

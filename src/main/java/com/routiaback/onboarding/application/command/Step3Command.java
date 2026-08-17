@@ -6,7 +6,10 @@ import java.time.LocalTime;
 
 public record Step3Command(
         RoutineTimePreference routineTimePreference,
-        RoutineDifficulty routineDifficulty,
-        LocalTime notificationTime
+        RoutineDifficulty routineDifficulty
 ) {
+    public Step3Command(RoutineTimePreference routineTimePreference,
+            RoutineDifficulty routineDifficulty, LocalTime ignoredNotificationTime) {
+        this(routineTimePreference, routineDifficulty);
+    }
 }

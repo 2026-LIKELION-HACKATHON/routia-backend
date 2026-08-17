@@ -2,7 +2,9 @@ package com.routiaback.global.security;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.routiaback.auth.application.AuthService;
@@ -12,15 +14,21 @@ import com.routiaback.auth.presentation.AuthController;
 import com.routiaback.global.error.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, CorsConfig.class, GlobalExceptionHandler.class})
+@TestPropertySource(properties =
+	"routia.cors.allowed-origins=https://frontend.example, https://preview.example")
 class AuthSecurityTest {
 
 	@Autowired
@@ -103,5 +111,35 @@ class AuthSecurityTest {
 		mockMvc.perform(get("/api/v1/onboarding/progress")
 				.header("Authorization", "Bearer valid-token"))
 			.andExpect(status().isNotFound());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"GET", "POST", "PATCH", "DELETE"})
+	void permitsPreflightWithoutJwtForConfiguredOriginAndAuthorizationHeader(String method) throws Exception {
+		mockMvc.perform(options("/api/v1/onboarding/progress")
+				.header(HttpHeaders.ORIGIN, "https://frontend.example")
+				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
+				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+			.andExpect(status().isOk())
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://frontend.example"))
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "Authorization"));
+	}
+
+	@Test
+	void returnsCorsHeaderOnActualRequestFromConfiguredOrigin() throws Exception {
+		mockMvc.perform(get("/api/v1/auth/email/check-duplicate")
+				.param("email", "user@example.com")
+				.header(HttpHeaders.ORIGIN, "https://preview.example"))
+			.andExpect(status().isOk())
+			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://preview.example"));
+	}
+
+	@Test
+	void rejectsPreflightFromOriginOutsideAllowlist() throws Exception {
+		mockMvc.perform(options("/api/v1/onboarding/progress")
+				.header(HttpHeaders.ORIGIN, "https://evil.example")
+				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+			.andExpect(status().isForbidden())
+			.andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
 	}
 }

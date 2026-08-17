@@ -1,0 +1,65 @@
+package com.routiaback.notification.application;
+
+import com.routiaback.auth.application.port.UserRepositoryPort;
+import com.routiaback.global.error.ApiException;
+import com.routiaback.global.error.ErrorCode;
+import com.routiaback.notification.application.port.PushDeviceRepositoryPort;
+import com.routiaback.notification.domain.PushDevice;
+import com.routiaback.notification.domain.PushPlatform;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Objects;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class PushDeviceService {
+    private static final int MAX_TOKEN_LENGTH = 512;
+
+    private final UserRepositoryPort users;
+    private final PushDeviceRepositoryPort devices;
+    private final Clock clock;
+
+    public PushDeviceService(UserRepositoryPort users, PushDeviceRepositoryPort devices, Clock clock) {
+        this.users = users;
+        this.devices = devices;
+        this.clock = clock;
+    }
+
+    @Transactional
+    public DeviceResult register(Long authenticatedUserId, Long userId, String token, PushPlatform platform) {
+        validateUser(authenticatedUserId, userId);
+        String normalizedToken = token == null ? null : token.trim();
+        if (normalizedToken == null || normalizedToken.isEmpty() || normalizedToken.length() > MAX_TOKEN_LENGTH
+                || platform != PushPlatform.WEB) {
+            throw new ApiException(ErrorCode.INVALID_PUSH_DEVICE);
+        }
+        Instant now = clock.instant();
+        PushDevice device = devices.findByToken(normalizedToken)
+                .map(existing -> existing.claim(userId, platform, now))
+                .orElseGet(() -> PushDevice.register(userId, normalizedToken, platform, now));
+        return DeviceResult.from(devices.save(device));
+    }
+
+    @Transactional
+    public DeviceResult deactivate(Long authenticatedUserId, Long userId, Long deviceId) {
+        validateUser(authenticatedUserId, userId);
+        PushDevice device = devices.findByIdAndUserId(deviceId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.PUSH_DEVICE_NOT_FOUND));
+        return DeviceResult.from(devices.save(device.deactivate(clock.instant())));
+    }
+
+    private void validateUser(Long authenticatedUserId, Long userId) {
+        if (!Objects.equals(authenticatedUserId, userId)) {
+            throw new ApiException(ErrorCode.USER_DATA_ACCESS_DENIED);
+        }
+        users.findById(userId).orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND))
+                .validateLoginAllowed();
+    }
+
+    public record DeviceResult(Long id, PushPlatform platform, boolean active, Instant lastSeenAt) {
+        static DeviceResult from(PushDevice device) {
+            return new DeviceResult(device.id(), device.platform(), device.active(), device.lastSeenAt());
+        }
+    }
+}

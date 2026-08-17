@@ -9,8 +9,10 @@ import com.routiaback.routine.domain.WeatherSnapshot;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import com.routiaback.routine.domain.RoutineStatus;
 
 @Repository
 class RoutinePersistenceAdapter implements DailyRoutineRepositoryPort, RoutineItemRepositoryPort, WeatherSnapshotRepositoryPort {
@@ -71,6 +73,16 @@ class RoutinePersistenceAdapter implements DailyRoutineRepositoryPort, RoutineIt
     @Override
     public List<DailyRoutine> findAllByUserIdAndRoutineDateBetween(Long userId, LocalDate start, LocalDate end) {
         return dailyRoutineJpaRepository.findAllByUserIdAndRoutineDateBetween(userId, start, end)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<DailyRoutine> findReadyDueForNotification(Instant now) {
+        return dailyRoutineJpaRepository
+                .findAllByStatusAndNotificationScheduledAtIsNotNullAndNotificationScheduledAtLessThanEqual(
+                        RoutineStatus.READY, now)
                 .stream()
                 .map(this::toDomain)
                 .toList();

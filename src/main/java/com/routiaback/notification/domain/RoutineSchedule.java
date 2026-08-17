@@ -31,14 +31,24 @@ public record RoutineSchedule(
             Instant nextGenerationAt,
             Instant now
     ) {
-        return new RoutineSchedule(userId, notificationTime, DEFAULT_TIMEZONE, true, true,
+        return create(userId, notificationTime, DEFAULT_TIMEZONE, nextGenerationAt, now);
+    }
+
+    public static RoutineSchedule create(Long userId, LocalTime notificationTime, String timezone,
+            Instant nextGenerationAt, Instant now) {
+        return new RoutineSchedule(userId, notificationTime, timezone, true, true,
                 nextGenerationAt, now, now);
     }
 
     public static RoutineSchedule createWithoutNotification(
             Long userId, Instant nextGenerationAt, Instant now
     ) {
-        return new RoutineSchedule(userId, null, DEFAULT_TIMEZONE, true, false,
+        return createWithoutNotification(userId, DEFAULT_TIMEZONE, nextGenerationAt, now);
+    }
+
+    public static RoutineSchedule createWithoutNotification(Long userId, String timezone,
+            Instant nextGenerationAt, Instant now) {
+        return new RoutineSchedule(userId, null, timezone, true, false,
                 nextGenerationAt, now, now);
     }
 

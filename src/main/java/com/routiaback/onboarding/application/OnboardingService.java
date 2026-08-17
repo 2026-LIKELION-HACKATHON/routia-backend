@@ -26,8 +26,6 @@ import com.routiaback.onboarding.domain.OnboardingStatus;
 @Service
 public class OnboardingService {
 
-    private static final ZoneId SCHEDULE_ZONE = ZoneId.of(RoutineSchedule.DEFAULT_TIMEZONE);
-
     private final PersonalizationService personalizationService;
     private final OnboardingProgressRepositoryPort progressRepository;
     private final RoutineScheduleRepositoryPort scheduleRepository;
@@ -98,7 +96,7 @@ public class OnboardingService {
 
     public CompleteResult complete(Long userId) {
         OnboardingProgress progress = currentProgress(userId);
-        LocalDate today = clock.instant().atZone(SCHEDULE_ZONE).toLocalDate();
+        LocalDate today = clock.instant().atZone(ZoneId.of(scheduleCalculator.defaultTimezone())).toLocalDate();
         if (progress.status() == OnboardingStatus.COMPLETED) {
             CompleteResult result = completedResult(progress, routineGenerationService.generate(
                     userId, today, RoutineGenerationType.INITIAL_ONBOARDING, null));
@@ -141,8 +139,9 @@ public class OnboardingService {
     private void ensureGenerationSchedule(Long userId) {
         if (scheduleRepository.findByUserId(userId).isPresent()) return;
         Instant now = clock.instant();
-        Instant next = scheduleCalculator.nextDefault(RoutineSchedule.DEFAULT_TIMEZONE, now).generationAt();
-        scheduleRepository.save(RoutineSchedule.createWithoutNotification(userId, next, now));
+        String timezone = scheduleCalculator.defaultTimezone();
+        Instant next = scheduleCalculator.nextDefault(timezone, now).generationAt();
+        scheduleRepository.save(RoutineSchedule.createWithoutNotification(userId, timezone, next, now));
     }
 
     public record CompleteResult(OnboardingProgress progress, Long routineId, GeneratedRoutine routine) { }

@@ -10,6 +10,10 @@ import com.routiaback.global.error.ErrorCode;
 import com.routiaback.notification.application.port.RoutineScheduleRepositoryPort;
 import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
 import com.routiaback.notification.domain.RoutineSchedule;
+import com.routiaback.personalization.domain.RoutineDifficulty;
+import com.routiaback.personalization.domain.RoutineTimePreference;
+import com.routiaback.routine.application.port.DailyRoutineRepositoryPort;
+import com.routiaback.routine.domain.DailyRoutine;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -23,12 +27,13 @@ class NotificationSettingsServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-15T00:00:00Z");
     private final FakeUserRepository users = new FakeUserRepository();
     private final FakeScheduleRepository schedules = new FakeScheduleRepository();
+    private final FakeDailyRoutineRepository routines = new FakeDailyRoutineRepository();
     private NotificationSettingsService service;
 
     @BeforeEach
     void setUp() {
         users.user = User.create("user@example.com", "hash", "Soeun", NOW).withId(1L);
-        service = new NotificationSettingsService(users, schedules,
+        service = new NotificationSettingsService(users, schedules, routines,
                 new RoutineGenerationScheduleCalculator(), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -53,6 +58,19 @@ class NotificationSettingsServiceTest {
         NotificationSettingsService.SettingsResult result = service.update(1L, 1L, false, null);
         assertThat(result.notificationEnabled()).isFalse();
         assertThat(result.notificationTime()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(schedules.schedule.nextGenerationAt()).isEqualTo(Instant.parse("2026-08-15T21:00:00Z"));
+    }
+
+    @Test
+    void settingsChangeDoesNotRegenerateTodayWhenTodayRoutineIsReady() {
+        routines.routine = DailyRoutine.generating(1L, java.time.LocalDate.of(2026, 8, 15),
+                RoutineDifficulty.SIMPLE, RoutineTimePreference.ANY, null, NOW)
+                .ready(null, "direction", "comment", RoutineDifficulty.SIMPLE,
+                        RoutineTimePreference.ANY, "{}", "{}", "model", "v1", NOW);
+
+        service.update(1L, 1L, true, LocalTime.of(20, 0));
+
+        assertThat(schedules.schedule.nextGenerationAt()).isEqualTo(Instant.parse("2026-08-16T10:50:00Z"));
     }
 
     @Test
@@ -78,5 +96,17 @@ class NotificationSettingsServiceTest {
         @Override public Optional<RoutineSchedule> findByUserId(Long userId) { return Optional.ofNullable(schedule); }
         @Override public RoutineSchedule save(RoutineSchedule schedule) { this.schedule = schedule; return schedule; }
         @Override public List<RoutineSchedule> findDueActive(Instant now) { return List.of(); }
+    }
+
+    private static class FakeDailyRoutineRepository implements DailyRoutineRepositoryPort {
+        private DailyRoutine routine;
+        @Override public Optional<DailyRoutine> findByUserIdAndRoutineDate(Long userId, java.time.LocalDate date) {
+            return Optional.ofNullable(routine);
+        }
+        @Override public Optional<DailyRoutine> findById(Long id) { return Optional.empty(); }
+        @Override public List<DailyRoutine> findAllByUserIdAndRoutineDateBetween(Long userId,
+                java.time.LocalDate start, java.time.LocalDate end) { return List.of(); }
+        @Override public List<DailyRoutine> findReadyDueForNotification(Instant now) { return List.of(); }
+        @Override public DailyRoutine save(DailyRoutine routine) { this.routine = routine; return routine; }
     }
 }

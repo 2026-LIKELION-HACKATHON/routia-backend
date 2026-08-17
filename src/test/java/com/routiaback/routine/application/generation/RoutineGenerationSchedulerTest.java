@@ -21,4 +21,10 @@ class RoutineGenerationSchedulerTest {
         new RoutineGenerationScheduler(schedules,generation,new RoutineGenerationScheduleCalculator(),Clock.fixed(now,ZoneOffset.UTC)).generateDue();
         then(generation).should().generate(1L,LocalDate.of(2026,8,16),RoutineGenerationType.SCHEDULED_DAILY,null);
     }
+
+    @Test void disabledNotificationIgnoresPreservedTimeAndAdvancesToDefaultGeneration(){Instant now=Instant.parse("2026-08-15T21:00:00Z");RoutineScheduleRepositoryPort schedules=org.mockito.Mockito.mock(RoutineScheduleRepositoryPort.class);RoutineGenerationService generation=org.mockito.Mockito.mock(RoutineGenerationService.class);RoutineSchedule schedule=new RoutineSchedule(1L,LocalTime.of(20,0),"Asia/Seoul",true,false,now,now.minusSeconds(60),now.minusSeconds(60));given(schedules.findDueActive(now)).willReturn(List.of(schedule));given(schedules.save(any())).willAnswer(i->i.getArgument(0));
+        new RoutineGenerationScheduler(schedules,generation,new RoutineGenerationScheduleCalculator(),Clock.fixed(now,ZoneOffset.UTC)).generateDue();
+        then(generation).should().generate(1L,LocalDate.of(2026,8,16),RoutineGenerationType.SCHEDULED_DAILY,null);
+        then(schedules).should().save(argThat(saved->saved.nextGenerationAt().equals(Instant.parse("2026-08-16T21:00:00Z"))));
+    }
 }

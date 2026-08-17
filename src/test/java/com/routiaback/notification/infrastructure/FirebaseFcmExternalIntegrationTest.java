@@ -3,6 +3,7 @@ package com.routiaback.notification.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.routiaback.notification.application.port.PushNotificationPort;
@@ -25,6 +26,16 @@ class FirebaseFcmExternalIntegrationTest {
         } finally {
             app.delete();
         }
+    }
+
+    @Test
+    void authenticatesServiceAccountForFirebaseMessaging() throws Exception {
+        assumeTrue(hasEnvironment("GOOGLE_APPLICATION_CREDENTIALS"));
+
+        GoogleCredentials credentials = GoogleCredentials.getApplicationDefault()
+                .createScoped("https://www.googleapis.com/auth/firebase.messaging");
+
+        assertThat(credentials.refreshAccessToken().getTokenValue()).isNotBlank();
     }
 
     @Test

@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -256,6 +257,8 @@ class PersonalizationServiceTest {
         @Override public UserPreference savePreference(UserPreference preference) { this.preference = preference; return preference; }
         @Override public List<String> findBodyConcernCodes(Long userId) { return List.copyOf(bodyCodes); }
         @Override public List<String> findSkinConcernCodes(Long userId) { return List.copyOf(skinCodes); }
+        @Override public Map<String, String> findBodyConcernNames(Collection<String> codes) { return Map.of(); }
+        @Override public Map<String, String> findSkinConcernNames(Collection<String> codes) { return Map.of(); }
         @Override public Set<String> findActiveBodyConcernCodes(Collection<String> codes) {
             Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeBodyCodes); return found;
         }

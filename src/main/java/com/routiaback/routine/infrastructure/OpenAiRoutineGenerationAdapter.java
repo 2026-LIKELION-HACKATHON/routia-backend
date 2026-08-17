@@ -5,6 +5,7 @@ import com.routiaback.global.error.ErrorCode;
 import com.routiaback.routine.application.generation.AiRoutineGenerationPort;
 import com.routiaback.routine.application.generation.GeneratedRoutine;
 import com.routiaback.routine.application.generation.RoutineGenerationRequest;
+import com.routiaback.routine.application.generation.RoutineGenerationValidator;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -186,8 +187,8 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
         root.set("required", stringArray("directionText", "homeComment", "items"));
 
         ObjectNode properties = root.putObject("properties");
-        properties.set("directionText", stringSchema());
-        properties.set("homeComment", stringSchema());
+        properties.set("directionText", stringSchema(RoutineGenerationValidator.DIRECTION_TEXT_MAX_LENGTH));
+        properties.set("homeComment", stringSchema(RoutineGenerationValidator.HOME_COMMENT_MAX_LENGTH));
 
         ObjectNode items = properties.putObject("items");
         items.put("type", "array");
@@ -203,15 +204,19 @@ public class OpenAiRoutineGenerationAdapter implements AiRoutineGenerationPort {
         ObjectNode itemProperties = item.putObject("properties");
         itemProperties.set("timeSlot", enumSchema("MORNING", "AFTERNOON", "EVENING", "BEDTIME"));
         itemProperties.set("category", enumSchema("SKIN", "BODY", "LIFESTYLE"));
-        itemProperties.set("title", stringSchema());
-        itemProperties.set("detail", stringSchema());
-        itemProperties.set("effectCode", stringSchema());
-        itemProperties.set("expectedEffect", stringSchema());
+        itemProperties.set("title", stringSchema(RoutineGenerationValidator.TITLE_MAX_LENGTH));
+        itemProperties.set("detail", stringSchema(RoutineGenerationValidator.DETAIL_MAX_LENGTH));
+        itemProperties.set("effectCode", stringSchema(RoutineGenerationValidator.EFFECT_CODE_MAX_LENGTH));
+        itemProperties.set("expectedEffect", stringSchema(RoutineGenerationValidator.EXPECTED_EFFECT_MAX_LENGTH));
         return root;
     }
 
     private ObjectNode stringSchema() {
         return objectMapper.createObjectNode().put("type", "string");
+    }
+
+    private ObjectNode stringSchema(int maxLength) {
+        return stringSchema().put("minLength", 1).put("maxLength", maxLength);
     }
 
     private ObjectNode enumSchema(String... values) {

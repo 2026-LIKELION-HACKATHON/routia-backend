@@ -6,6 +6,8 @@ import com.routiaback.personalization.domain.UserPreference;
 import com.routiaback.personalization.domain.UserProfile;
 import java.util.Collection;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -65,6 +67,28 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
     @Override
     public List<String> findSkinConcernCodes(Long userId) {
         return userSkinConcernRepository.findCodesByUserId(userId);
+    }
+
+    @Override
+    public Map<String, String> findBodyConcernNames(Collection<String> codes) {
+        Map<String, String> namesByCode = bodyConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(BodyConcernJpaEntity::code, BodyConcernJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> {
+            if (namesByCode.containsKey(code)) ordered.put(code, namesByCode.get(code));
+        });
+        return ordered;
+    }
+
+    @Override
+    public Map<String, String> findSkinConcernNames(Collection<String> codes) {
+        Map<String, String> namesByCode = skinConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(SkinConcernJpaEntity::code, SkinConcernJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> {
+            if (namesByCode.containsKey(code)) ordered.put(code, namesByCode.get(code));
+        });
+        return ordered;
     }
 
     @Override

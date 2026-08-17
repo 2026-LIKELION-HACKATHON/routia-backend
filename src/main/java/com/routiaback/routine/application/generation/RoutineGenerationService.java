@@ -44,15 +44,25 @@ public class RoutineGenerationService {
         try{
             WeatherInfo weather=weatherClient.fetchCurrentWeather(location.latitude().doubleValue(),location.longitude().doubleValue());
             RoutineGenerationRequest.PerformanceInput performance=performance(userId,date);
-            RoutineGenerationRequest request=new RoutineGenerationRequest(date,profile,need,new RoutineGenerationRequest.WeatherInput(weather.temperature(),weather.feelsLike(),weather.weatherCode(),weather.uvIndex()),performance);
+            String weatherCondition=WeatherCodeMapper.toDescription(weather.weatherCode());
+            RoutineGenerationRequest request=new RoutineGenerationRequest(
+                    date,
+                    profile,
+                    need,
+                    needs.findBodyConcernNames(need.bodyConcerns()),
+                    needs.findSkinConcernNames(need.skinConcerns()),
+                    new RoutineGenerationRequest.WeatherInput(
+                            weather.temperature(), weather.feelsLike(), weather.weatherCode(),
+                            weatherCondition, weather.uvIndex()),
+                    performance);
             GeneratedRoutine generated=ai.generate(request); validator.validate(generated,preference.routineDifficulty());
-            WeatherSnapshot snapshot=new WeatherSnapshot(null,userId,date,location.regionSido(),location.regionSigungu(),location.latitude(),location.longitude(),BigDecimal.valueOf(weather.temperature()),BigDecimal.valueOf(weather.uvIndex()),WeatherCodeMapper.toDescription(weather.weatherCode()),"OPEN_METEO",now,now);
+            WeatherSnapshot snapshot=new WeatherSnapshot(null,userId,date,location.regionSido(),location.regionSigungu(),location.latitude(),location.longitude(),BigDecimal.valueOf(weather.temperature()),BigDecimal.valueOf(weather.uvIndex()),weatherCondition,"OPEN_METEO",now,now);
             DailyRoutine ready=transactions.complete(routine,snapshot,generated,preference.routineDifficulty(),preference.routineTimePreference(),json(personalization(request)),json(performance),ai.model(),ai.promptVersion(),clock.instant());
             return new GenerationOutcome(ready.id(),ready.status(),true,generated);
         }catch(RuntimeException ex){transactions.fail(routine.id(),errorCode(ex),clock.instant());throw ex instanceof ApiException?ex:new ApiException(ErrorCode.ROUTINE_GENERATION_FAILED,ex);}
     }
 
-    private Map<String,Object> personalization(RoutineGenerationRequest r){Map<String,Object> m=new LinkedHashMap<>();m.put("height",r.profile().height());m.put("weight",r.profile().weight());m.put("gender",r.profile().gender());m.put("ageGroup",r.profile().ageGroup());m.put("bodyGoal",r.needs().bodyGoal());m.put("bodyConcerns",r.needs().bodyConcerns());m.put("skinType",r.needs().skinType());m.put("skinConcerns",r.needs().skinConcerns());m.put("routineTimePreference",r.needs().routineTimePreference());m.put("routineDifficulty",r.needs().routineDifficulty());return m;}
+    private Map<String,Object> personalization(RoutineGenerationRequest r){Map<String,Object> m=new LinkedHashMap<>();m.put("height",r.profile().height());m.put("weight",r.profile().weight());m.put("gender",r.profile().gender());m.put("ageGroup",r.profile().ageGroup());m.put("bodyGoal",r.needs().bodyGoal());m.put("bodyConcerns",r.needs().bodyConcerns());m.put("bodyConcernNames",r.bodyConcernNames());m.put("skinType",r.needs().skinType());m.put("skinConcerns",r.needs().skinConcerns());m.put("skinConcernNames",r.skinConcernNames());m.put("routineTimePreference",r.needs().routineTimePreference());m.put("routineDifficulty",r.needs().routineDifficulty());return m;}
     private String json(Object value){try{return objectMapper.writeValueAsString(value);}catch(JacksonException ex){throw new IllegalStateException("snapshot serialization failed",ex);}}
     private String errorCode(RuntimeException ex){return ex instanceof ApiException a?a.getErrorCode().name():"EXTERNAL_AI_ERROR";}
 

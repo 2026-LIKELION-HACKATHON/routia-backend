@@ -16,87 +16,180 @@ import com.routiaback.routine.application.generation.RoutineGenerationValidator;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-@EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
+@EnabledIf("liveTestEnabled")
 class OpenAiRoutineGenerationAdapterLiveTest {
 
+    private final ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
+    private final RoutineGenerationValidator validator = new RoutineGenerationValidator();
+
     @Test
-    void generatesValidRoutineThroughRealResponsesApi() throws Exception {
-        ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
-        String model = System.getenv().getOrDefault("AI_MODEL", "gpt-5.6-luna");
-        OpenAiRoutineGenerationAdapter adapter = new OpenAiRoutineGenerationAdapter(
+    void generatesUxAlignedRoutinesForFourRepresentativeCases() throws Exception {
+        OpenAiRoutineGenerationAdapter adapter = adapter();
+
+        for (LiveCase liveCase : cases()) {
+            GeneratedRoutine result = adapter.generate(liveCase.request());
+
+            validator.validate(result, liveCase.difficulty());
+            assertThat(result.items()).hasSize(liveCase.targetCount());
+            assertThat(result.items()).allSatisfy(item -> {
+                assertThat(item.title()).isNotBlank();
+                assertThat(item.detail()).isNotBlank();
+                assertThat(item.effectCode()).isNotBlank();
+                assertThat(item.expectedEffect()).isNotBlank();
+            });
+            assertPreferenceDistribution(liveCase, result);
+            System.out.println("LIVE_OPENAI_" + liveCase.name() + "=" + report(result));
+        }
+    }
+
+    private OpenAiRoutineGenerationAdapter adapter() throws Exception {
+        String model = setting("AI_MODEL", "gpt-5.6-luna");
+        return new OpenAiRoutineGenerationAdapter(
                 objectMapper,
-                new PromptTemplateLoader(new ClassPathResource("prompts/routine-v1.txt"), "routine-v1"),
+                new PromptTemplateLoader(new ClassPathResource("prompts/routine-v2.txt"), "routine-v2"),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
                 URI.create("https://api.openai.com/v1/responses"),
-                System.getenv("OPENAI_API_KEY"),
+                setting("OPENAI_API_KEY", ""),
                 model,
                 "low",
                 3_000,
                 Duration.ofSeconds(60));
-
-        GeneratedRoutine result = adapter.generate(request());
-
-        new RoutineGenerationValidator().validate(result, RoutineDifficulty.COMPLEX);
-        assertThat(result.directionText()).isNotBlank();
-        assertThat(result.homeComment()).isNotBlank();
-        assertThat(result.items()).isNotEmpty().hasSizeLessThanOrEqualTo(12);
-        assertThat(result.items()).allSatisfy(item -> {
-            assertThat(item.title()).isNotBlank();
-            assertThat(item.detail()).isNotBlank();
-            assertThat(item.effectCode()).isNotBlank();
-            assertThat(item.expectedEffect()).isNotBlank();
-        });
-        System.out.println("LIVE_OPENAI_RESULT=" + objectMapper.writeValueAsString(result));
     }
 
-    private RoutineGenerationRequest request() {
+    static boolean liveTestEnabled() {
+        return Boolean.parseBoolean(System.getenv("RUN_OPENAI_LIVE_TEST"));
+    }
+
+    private String setting(String name, String defaultValue) throws Exception {
+        String environmentValue = System.getenv(name);
+        if (environmentValue != null && !environmentValue.isBlank()) return environmentValue;
+        Path envFile = Path.of(".env");
+        if (!Files.exists(envFile)) return defaultValue;
+        return Files.readAllLines(envFile).stream()
+                .filter(line -> line.startsWith(name + "="))
+                .map(line -> line.substring(name.length() + 1))
+                .filter(value -> !value.isBlank())
+                .findFirst()
+                .orElse(defaultValue);
+    }
+
+    private void assertPreferenceDistribution(LiveCase liveCase, GeneratedRoutine result) {
+        Map<String, Long> counts = result.items().stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        GeneratedRoutine.GeneratedItem::timeSlot,
+                        LinkedHashMap::new,
+                        java.util.stream.Collectors.counting()));
+        if (liveCase.timePreference() == RoutineTimePreference.MORNING) {
+            assertThat(counts.getOrDefault("MORNING", 0L))
+                    .isGreaterThanOrEqualTo(liveCase.targetCount() / 2L);
+        }
+        if (liveCase.timePreference() == RoutineTimePreference.EVENING) {
+            long eveningAndBedtime = counts.getOrDefault("EVENING", 0L)
+                    + counts.getOrDefault("BEDTIME", 0L);
+            assertThat(eveningAndBedtime).isGreaterThanOrEqualTo(liveCase.targetCount() / 2L);
+            assertThat(eveningAndBedtime).isLessThan(liveCase.targetCount());
+        }
+    }
+
+    private String report(GeneratedRoutine result) throws Exception {
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("distribution", result.items().stream().collect(java.util.stream.Collectors.groupingBy(
+                GeneratedRoutine.GeneratedItem::timeSlot,
+                LinkedHashMap::new,
+                java.util.stream.Collectors.counting())));
+        report.put("routine", result);
+        return objectMapper.writeValueAsString(report);
+    }
+
+    private List<LiveCase> cases() {
+        return List.of(
+                new LiveCase("CASE_A_MORNING_HIGH_UV", RoutineDifficulty.SIMPLE,
+                        RoutineTimePreference.MORNING, 8,
+                        request(RoutineTimePreference.MORNING, highUvWeather(), averagePerformance())),
+                new LiveCase("CASE_B_EVENING", RoutineDifficulty.SIMPLE,
+                        RoutineTimePreference.EVENING, 8,
+                        request(RoutineTimePreference.EVENING, mildWeather(), averagePerformance())),
+                new LiveCase("CASE_C_LOW_PERFORMANCE", RoutineDifficulty.SIMPLE,
+                        RoutineTimePreference.MORNING, 8,
+                        request(RoutineTimePreference.MORNING, mildWeather(), lowPerformance())),
+                new LiveCase("CASE_D_NEW_USER", RoutineDifficulty.SIMPLE,
+                        RoutineTimePreference.ANY, 8,
+                        request(RoutineTimePreference.ANY, mildWeather(), emptyPerformance())));
+    }
+
+    private RoutineGenerationRequest request(
+            RoutineTimePreference timePreference,
+            RoutineGenerationRequest.WeatherInput weather,
+            RoutineGenerationRequest.PerformanceInput performance) {
         ProfileResult profile = new ProfileResult(
-                new BigDecimal("165.3"),
-                new BigDecimal("55.2"),
-                Gender.FEMALE,
-                AgeGroup.TWENTIES,
-                null,
-                "서울특별시",
-                "중구",
-                new BigDecimal("37.5665"),
-                new BigDecimal("126.9780"),
-                null,
-                null);
+                new BigDecimal("165.3"), new BigDecimal("55.2"), Gender.FEMALE, AgeGroup.TWENTIES,
+                null, "서울특별시", "중구", new BigDecimal("37.5665"),
+                new BigDecimal("126.9780"), null, null);
         NeedsResult needs = new NeedsResult(
                 BodyGoal.BUILD_HABIT,
                 List.of("SHOULDER_NECK", "LOWER_BODY_SWELLING"),
                 SkinType.COMBINATION,
                 List.of("DRYNESS", "PORES"),
-                RoutineTimePreference.ANY,
-                RoutineDifficulty.COMPLEX);
-        RoutineGenerationRequest.PerformanceInput performance =
-                new RoutineGenerationRequest.PerformanceInput(
-                        3,
-                        5,
-                        0.6,
-                        List.of("BODY"),
-                        List.of("EVENING"),
-                        0.68,
-                        3.4,
-                        Map.of("SKIN", 0.8, "BODY", 0.5),
-                        Map.of("MORNING", 0.8, "EVENING", 0.4),
-                        "EVENING",
-                        "MORNING");
+                timePreference,
+                RoutineDifficulty.SIMPLE);
         return new RoutineGenerationRequest(
-                LocalDate.of(2026, 8, 16),
+                LocalDate.of(2026, 8, 17),
                 profile,
                 needs,
-                new RoutineGenerationRequest.WeatherInput(29.0, 31.0, 1, 7.2),
+                Map.of("SHOULDER_NECK", "어깨·목 긴장", "LOWER_BODY_SWELLING", "하체 붓기"),
+                Map.of("DRYNESS", "건조함", "PORES", "모공"),
+                weather,
                 performance);
+    }
+
+    private RoutineGenerationRequest.WeatherInput highUvWeather() {
+        return new RoutineGenerationRequest.WeatherInput(31.0, 34.0, 0, "맑음", 8.5);
+    }
+
+    private RoutineGenerationRequest.WeatherInput mildWeather() {
+        return new RoutineGenerationRequest.WeatherInput(24.0, 24.5, 2, "구름 조금", 3.0);
+    }
+
+    private RoutineGenerationRequest.PerformanceInput averagePerformance() {
+        return new RoutineGenerationRequest.PerformanceInput(
+                5, 8, 0.625, List.of("BODY"), List.of("EVENING"), 0.68, 5.4,
+                Map.of("SKIN", 0.75, "BODY", 0.55, "LIFESTYLE", 0.7),
+                Map.of("MORNING", 0.8, "AFTERNOON", 0.65, "EVENING", 0.5, "BEDTIME", 0.7),
+                "EVENING", "MORNING");
+    }
+
+    private RoutineGenerationRequest.PerformanceInput lowPerformance() {
+        return new RoutineGenerationRequest.PerformanceInput(
+                2, 8, 0.25, List.of("BODY", "LIFESTYLE"), List.of("EVENING"), 0.31, 2.5,
+                Map.of("SKIN", 0.5, "BODY", 0.2, "LIFESTYLE", 0.25),
+                Map.of("MORNING", 0.65, "AFTERNOON", 0.3, "EVENING", 0.1, "BEDTIME", 0.2),
+                "EVENING", "MORNING");
+    }
+
+    private RoutineGenerationRequest.PerformanceInput emptyPerformance() {
+        return new RoutineGenerationRequest.PerformanceInput(
+                null, null, null, List.of(), List.of(), 0.0, 0.0,
+                Map.of(), Map.of(), null, null);
+    }
+
+    private record LiveCase(
+            String name,
+            RoutineDifficulty difficulty,
+            RoutineTimePreference timePreference,
+            int targetCount,
+            RoutineGenerationRequest request) {
     }
 }

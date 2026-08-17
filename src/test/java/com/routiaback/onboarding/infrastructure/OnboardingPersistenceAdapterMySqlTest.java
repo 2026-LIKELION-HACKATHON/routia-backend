@@ -66,6 +66,7 @@ class OnboardingPersistenceAdapterMySqlTest {
     @Test
     void persistsAndRestoresOnboardingProgress() {
         OnboardingProgress progress = OnboardingProgress.notStarted(1L, NOW)
+                .completeStep0(NOW)
                 .completeStep1(NOW)
                 .completeStep2(NOW.plusSeconds(60));
 

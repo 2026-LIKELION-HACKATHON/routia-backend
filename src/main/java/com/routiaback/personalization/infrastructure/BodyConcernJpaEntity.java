@@ -24,4 +24,5 @@ class BodyConcernJpaEntity {
     }
 
     String code() { return code; }
+    String name() { return name; }
 }

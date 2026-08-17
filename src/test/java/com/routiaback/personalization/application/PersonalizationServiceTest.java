@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +51,8 @@ class PersonalizationServiceTest {
         users.user = User.create("user@example.com", "hash", "Soeun", NOW).withId(1L);
         needs.activeBodyCodes.addAll(Set.of("SWELLING", "FATIGUE"));
         needs.activeSkinCodes.addAll(Set.of("ACNE", "PORE"));
+        needs.activeGoals.addAll(Set.of(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT));
+        needs.activeTools.addAll(Set.of("FACE_FASCIA_TOOL"));
         service = new PersonalizationService(users, profiles, needs, images,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -114,6 +117,28 @@ class PersonalizationServiceTest {
 
         assertThat(result.bodyConcerns()).containsExactly("SWELLING", "FATIGUE");
         assertThat(result.skinConcerns()).containsExactly("ACNE");
+    }
+
+    @Test
+    void storesMultipleBodyGoalsAndOwnedToolsAsFinalSelections() {
+        NeedsResult result = service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, List.of("SWELLING"), SkinType.NORMAL, List.of("ACNE"),
+                null, null, List.of(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT, BodyGoal.MAINTAIN),
+                List.of("face_fascia_tool", "FACE_FASCIA_TOOL")));
+
+        assertThat(result.bodyGoals()).containsExactly(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT);
+        assertThat(result.ownedTools()).containsExactly("FACE_FASCIA_TOOL");
+        assertThat(result.bodyGoal()).isEqualTo(BodyGoal.MAINTAIN);
+    }
+
+    @Test
+    void rejectsUnknownOwnedToolWithoutReplacingStoredSelections() {
+        assertThatThrownBy(() -> service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, null, null, null, null, null,
+                List.of(BodyGoal.MAINTAIN), List.of("UNKNOWN_TOOL"))))
+                .isInstanceOf(ApiException.class).extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_OWNED_TOOL);
+        assertThat(needs.tools).isEmpty();
     }
 
     @Test
@@ -251,19 +276,37 @@ class PersonalizationServiceTest {
         private final LinkedHashSet<String> skinCodes = new LinkedHashSet<>();
         private final Set<String> activeBodyCodes = new LinkedHashSet<>();
         private final Set<String> activeSkinCodes = new LinkedHashSet<>();
+        private final LinkedHashSet<BodyGoal> goals = new LinkedHashSet<>();
+        private final LinkedHashSet<String> tools = new LinkedHashSet<>();
+        private final Set<BodyGoal> activeGoals = new LinkedHashSet<>();
+        private final Set<String> activeTools = new LinkedHashSet<>();
 
         @Override public Optional<UserPreference> findPreferenceByUserId(Long userId) { return Optional.ofNullable(preference); }
         @Override public UserPreference savePreference(UserPreference preference) { this.preference = preference; return preference; }
         @Override public List<String> findBodyConcernCodes(Long userId) { return List.copyOf(bodyCodes); }
         @Override public List<String> findSkinConcernCodes(Long userId) { return List.copyOf(skinCodes); }
+        @Override public List<BodyGoal> findBodyGoals(Long userId) { return List.copyOf(goals); }
+        @Override public List<String> findOwnedToolCodes(Long userId) { return List.copyOf(tools); }
+        @Override public Map<String, String> findBodyConcernNames(Collection<String> codes) { return Map.of(); }
+        @Override public Map<String, String> findSkinConcernNames(Collection<String> codes) { return Map.of(); }
+        @Override public Map<String, String> findBodyGoalNames(Collection<BodyGoal> codes) { return Map.of(); }
+        @Override public Map<String, String> findOwnedToolNames(Collection<String> codes) { return Map.of(); }
         @Override public Set<String> findActiveBodyConcernCodes(Collection<String> codes) {
             Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeBodyCodes); return found;
         }
         @Override public Set<String> findActiveSkinConcernCodes(Collection<String> codes) {
             Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeSkinCodes); return found;
         }
+        @Override public Set<BodyGoal> findActiveBodyGoals(Collection<BodyGoal> codes) {
+            Set<BodyGoal> found = new LinkedHashSet<>(codes); found.retainAll(activeGoals); return found;
+        }
+        @Override public Set<String> findActiveOwnedToolCodes(Collection<String> codes) {
+            Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeTools); return found;
+        }
         @Override public void replaceBodyConcerns(Long userId, Collection<String> codes) { bodyCodes.clear(); bodyCodes.addAll(codes); }
         @Override public void replaceSkinConcerns(Long userId, Collection<String> codes) { skinCodes.clear(); skinCodes.addAll(codes); }
+        @Override public void replaceBodyGoals(Long userId, Collection<BodyGoal> codes) { goals.clear(); goals.addAll(codes); }
+        @Override public void replaceOwnedTools(Long userId, Collection<String> codes) { tools.clear(); tools.addAll(codes); }
     }
 
     private static class FakeImageStorage implements ProfileImageStoragePort {

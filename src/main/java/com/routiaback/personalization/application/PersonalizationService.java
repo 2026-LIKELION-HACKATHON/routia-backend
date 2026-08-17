@@ -1,6 +1,7 @@
 package com.routiaback.personalization.application;
 
 import com.routiaback.auth.application.port.UserRepositoryPort;
+import com.routiaback.auth.domain.User;
 import com.routiaback.global.error.ApiException;
 import com.routiaback.global.error.ErrorCode;
 import com.routiaback.personalization.application.command.ProfileImageUpload;
@@ -63,22 +64,22 @@ public class PersonalizationService {
 
     @Transactional(readOnly = true)
     public ProfileResult getProfile(Long authenticatedUserId, Long userId) {
-        ensureAccessibleUser(authenticatedUserId, userId);
+        User user = ensureAccessibleUser(authenticatedUserId, userId);
         UserProfile profile = profileRepository.findByUserId(userId)
                 .orElseGet(() -> UserProfile.empty(userId, clock.instant()));
-        return ProfileResult.from(profile);
+        return ProfileResult.from(profile, user.name());
     }
 
     @Transactional
     public ProfileResult updateProfile(Long authenticatedUserId, Long userId, UpdateProfileCommand command) {
-        ensureAccessibleUser(authenticatedUserId, userId);
+        User user = ensureAccessibleUser(authenticatedUserId, userId);
         Instant now = clock.instant();
         UserProfile current = profileRepository.findByUserId(userId)
                 .orElseGet(() -> UserProfile.empty(userId, now));
         UserProfilePatch patch = toPatch(command);
         UserProfile updated = current.update(patch, now);
         validateProfile(updated, patch.hasLocationChange());
-        return ProfileResult.from(profileRepository.save(updated));
+        return ProfileResult.from(profileRepository.save(updated), user.name());
     }
 
     @Transactional(readOnly = true)
@@ -86,8 +87,7 @@ public class PersonalizationService {
         ensureAccessibleUser(authenticatedUserId, userId);
         UserPreference preference = needsRepository.findPreferenceByUserId(userId)
                 .orElseGet(() -> UserPreference.empty(userId, clock.instant()));
-        return NeedsResult.from(preference, needsRepository.findBodyConcernCodes(userId),
-                needsRepository.findSkinConcernCodes(userId));
+        return needsResult(userId, preference);
     }
 
     @Transactional
@@ -95,14 +95,21 @@ public class PersonalizationService {
         ensureAccessibleUser(authenticatedUserId, userId);
         LinkedHashSet<String> bodyConcerns = normalizeCodes(command.bodyConcerns());
         LinkedHashSet<String> skinConcerns = normalizeCodes(command.skinConcerns());
+        LinkedHashSet<String> ownedTools = normalizeCodes(command.ownedTools());
+        LinkedHashSet<com.routiaback.personalization.domain.BodyGoal> bodyGoals = command.bodyGoals() == null
+                ? null : new LinkedHashSet<>(command.bodyGoals());
         validateConcernCodes(bodyConcerns, true);
         validateConcernCodes(skinConcerns, false);
+        validateBodyGoals(bodyGoals);
+        validateOwnedTools(ownedTools);
 
         Instant now = clock.instant();
         UserPreference current = needsRepository.findPreferenceByUserId(userId)
                 .orElseGet(() -> UserPreference.empty(userId, now));
+        com.routiaback.personalization.domain.BodyGoal primaryGoal = bodyGoals == null
+                ? command.bodyGoal() : bodyGoals.iterator().next();
         UserPreference saved = needsRepository.savePreference(current.update(
-                command.bodyGoal(), command.skinType(), command.routineTimePreference(),
+                primaryGoal, command.skinType(), command.routineTimePreference(),
                 command.routineDifficulty(), now));
 
         if (bodyConcerns != null) {
@@ -111,8 +118,13 @@ public class PersonalizationService {
         if (skinConcerns != null) {
             needsRepository.replaceSkinConcerns(userId, skinConcerns);
         }
-        return NeedsResult.from(saved, needsRepository.findBodyConcernCodes(userId),
-                needsRepository.findSkinConcernCodes(userId));
+        if (bodyGoals != null) {
+            needsRepository.replaceBodyGoals(userId, bodyGoals);
+        }
+        if (ownedTools != null) {
+            needsRepository.replaceOwnedTools(userId, ownedTools);
+        }
+        return needsResult(userId, saved);
     }
 
     @Transactional
@@ -121,7 +133,7 @@ public class PersonalizationService {
             Long userId,
             ProfileImageUpload upload
     ) {
-        ensureAccessibleUser(authenticatedUserId, userId);
+        User user = ensureAccessibleUser(authenticatedUserId, userId);
         validateImage(upload);
         Instant now = clock.instant();
         UserProfile current = profileRepository.findByUserId(userId)
@@ -138,20 +150,28 @@ public class PersonalizationService {
             if (current.profileImageKey() != null && !current.profileImageKey().equals(newKey)) {
                 imageStorage.delete(current.profileImageKey());
             }
-            return ProfileResult.from(saved);
+            return ProfileResult.from(saved, user.name());
         } catch (RuntimeException exception) {
             imageStorage.delete(newKey);
             throw exception;
         }
     }
 
-    private void ensureAccessibleUser(Long authenticatedUserId, Long userId) {
+    @Transactional
+    public String updateUserName(Long authenticatedUserId, Long userId, String userName) {
+        User user = ensureAccessibleUser(authenticatedUserId, userId);
+        return userRepository.save(user.rename(userName, clock.instant())).name();
+    }
+
+    private User ensureAccessibleUser(Long authenticatedUserId, Long userId) {
         if (!Objects.equals(authenticatedUserId, userId)) {
             throw new ApiException(ErrorCode.USER_DATA_ACCESS_DENIED);
         }
-        userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND))
-                .validateLoginAllowed();
+                ;
+        user.validateLoginAllowed();
+        return user;
     }
 
     private UserProfilePatch toPatch(UpdateProfileCommand command) {
@@ -224,6 +244,27 @@ public class PersonalizationService {
         if (!activeCodes.containsAll(codes)) {
             throw new ApiException(body ? ErrorCode.INVALID_BODY_CONCERN : ErrorCode.INVALID_SKIN_CONCERN);
         }
+    }
+
+    private void validateBodyGoals(Collection<com.routiaback.personalization.domain.BodyGoal> goals) {
+        if (goals == null) return;
+        if (goals.isEmpty() || goals.size() > 3
+                || !needsRepository.findActiveBodyGoals(goals).containsAll(goals)) {
+            throw new ApiException(ErrorCode.INVALID_BODY_GOAL);
+        }
+    }
+
+    private void validateOwnedTools(Collection<String> codes) {
+        if (codes == null || codes.isEmpty()) return;
+        if (codes.size() > 4 || !needsRepository.findActiveOwnedToolCodes(codes).containsAll(codes)) {
+            throw new ApiException(ErrorCode.INVALID_OWNED_TOOL);
+        }
+    }
+
+    private NeedsResult needsResult(Long userId, UserPreference preference) {
+        return NeedsResult.from(preference, needsRepository.findBodyGoals(userId),
+                needsRepository.findBodyConcernCodes(userId), needsRepository.findSkinConcernCodes(userId),
+                needsRepository.findOwnedToolCodes(userId));
     }
 
     private void validateImage(ProfileImageUpload upload) {

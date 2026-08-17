@@ -75,6 +75,7 @@ class UserDataControllerTest {
         mockMvc.perform(get("/api/v1/users/1/profile"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.userName").value("Soeun"))
                 .andExpect(jsonPath("$.data.height").value(165.5))
                 .andExpect(jsonPath("$.data.gender").value("FEMALE"))
                 .andExpect(jsonPath("$.data.locationSource").value("GPS"));
@@ -177,7 +178,7 @@ class UserDataControllerTest {
     }
 
     private ProfileResult profileResult() {
-        return new ProfileResult(new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE,
+        return new ProfileResult("Soeun", new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE,
                 AgeGroup.TWENTIES, "1/profile.jpg", "서울특별시", "중구",
                 new BigDecimal("37.5665000"), new BigDecimal("126.9780000"), LocationSource.GPS,
                 Instant.parse("2026-08-15T00:00:00Z"));

@@ -4,8 +4,11 @@ import com.routiaback.personalization.application.port.UserNeedsRepositoryPort;
 import com.routiaback.personalization.application.port.UserProfileRepositoryPort;
 import com.routiaback.personalization.domain.UserPreference;
 import com.routiaback.personalization.domain.UserProfile;
+import com.routiaback.personalization.domain.BodyGoal;
 import java.util.Collection;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -20,6 +23,10 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
     private final SkinConcernJpaRepository skinConcernRepository;
     private final UserBodyConcernJpaRepository userBodyConcernRepository;
     private final UserSkinConcernJpaRepository userSkinConcernRepository;
+    private final BodyGoalJpaRepository bodyGoalRepository;
+    private final UserBodyGoalJpaRepository userBodyGoalRepository;
+    private final OwnedToolJpaRepository ownedToolRepository;
+    private final UserOwnedToolJpaRepository userOwnedToolRepository;
 
     PersonalizationPersistenceAdapter(
             PersonalizationProfileJpaRepository profileRepository,
@@ -27,7 +34,11 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
             BodyConcernJpaRepository bodyConcernRepository,
             SkinConcernJpaRepository skinConcernRepository,
             UserBodyConcernJpaRepository userBodyConcernRepository,
-            UserSkinConcernJpaRepository userSkinConcernRepository
+            UserSkinConcernJpaRepository userSkinConcernRepository,
+            BodyGoalJpaRepository bodyGoalRepository,
+            UserBodyGoalJpaRepository userBodyGoalRepository,
+            OwnedToolJpaRepository ownedToolRepository,
+            UserOwnedToolJpaRepository userOwnedToolRepository
     ) {
         this.profileRepository = profileRepository;
         this.preferenceRepository = preferenceRepository;
@@ -35,6 +46,10 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
         this.skinConcernRepository = skinConcernRepository;
         this.userBodyConcernRepository = userBodyConcernRepository;
         this.userSkinConcernRepository = userSkinConcernRepository;
+        this.bodyGoalRepository = bodyGoalRepository;
+        this.userBodyGoalRepository = userBodyGoalRepository;
+        this.ownedToolRepository = ownedToolRepository;
+        this.userOwnedToolRepository = userOwnedToolRepository;
     }
 
     @Override
@@ -68,6 +83,57 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
     }
 
     @Override
+    public List<BodyGoal> findBodyGoals(Long userId) {
+        return userBodyGoalRepository.findCodesByUserId(userId).stream().map(BodyGoal::valueOf).toList();
+    }
+
+    @Override
+    public List<String> findOwnedToolCodes(Long userId) {
+        return userOwnedToolRepository.findCodesByUserId(userId);
+    }
+
+    @Override
+    public Map<String, String> findBodyConcernNames(Collection<String> codes) {
+        Map<String, String> namesByCode = bodyConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(BodyConcernJpaEntity::code, BodyConcernJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> {
+            if (namesByCode.containsKey(code)) ordered.put(code, namesByCode.get(code));
+        });
+        return ordered;
+    }
+
+    @Override
+    public Map<String, String> findSkinConcernNames(Collection<String> codes) {
+        Map<String, String> namesByCode = skinConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(SkinConcernJpaEntity::code, SkinConcernJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> {
+            if (namesByCode.containsKey(code)) ordered.put(code, namesByCode.get(code));
+        });
+        return ordered;
+    }
+
+    @Override
+    public Map<String, String> findBodyGoalNames(Collection<BodyGoal> goals) {
+        List<String> codes = goals.stream().map(Enum::name).toList();
+        Map<String, String> names = bodyGoalRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(BodyGoalJpaEntity::code, BodyGoalJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> { if (names.containsKey(code)) ordered.put(code, names.get(code)); });
+        return ordered;
+    }
+
+    @Override
+    public Map<String, String> findOwnedToolNames(Collection<String> codes) {
+        Map<String, String> names = ownedToolRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .collect(Collectors.toMap(OwnedToolJpaEntity::code, OwnedToolJpaEntity::name));
+        Map<String, String> ordered = new LinkedHashMap<>();
+        codes.forEach(code -> { if (names.containsKey(code)) ordered.put(code, names.get(code)); });
+        return ordered;
+    }
+
+    @Override
     public Set<String> findActiveBodyConcernCodes(Collection<String> codes) {
         return bodyConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
                 .map(BodyConcernJpaEntity::code)
@@ -79,6 +145,18 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
         return skinConcernRepository.findAllByCodeInAndActiveTrue(codes).stream()
                 .map(SkinConcernJpaEntity::code)
                 .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<BodyGoal> findActiveBodyGoals(Collection<BodyGoal> goals) {
+        return bodyGoalRepository.findAllByCodeInAndActiveTrue(goals.stream().map(Enum::name).toList()).stream()
+                .map(entity -> BodyGoal.valueOf(entity.code())).collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<String> findActiveOwnedToolCodes(Collection<String> codes) {
+        return ownedToolRepository.findAllByCodeInAndActiveTrue(codes).stream()
+                .map(OwnedToolJpaEntity::code).collect(Collectors.toSet());
     }
 
     @Override
@@ -97,6 +175,22 @@ class PersonalizationPersistenceAdapter implements UserProfileRepositoryPort, Us
         userSkinConcernRepository.saveAll(codes.stream()
                 .map(code -> new UserSkinConcernJpaEntity(userId, code))
                 .toList());
+    }
+
+    @Override
+    public void replaceBodyGoals(Long userId, Collection<BodyGoal> goals) {
+        userBodyGoalRepository.deleteAllByUserId(userId);
+        userBodyGoalRepository.flush();
+        userBodyGoalRepository.saveAll(goals.stream()
+                .map(goal -> new UserBodyGoalJpaEntity(userId, goal.name())).toList());
+    }
+
+    @Override
+    public void replaceOwnedTools(Long userId, Collection<String> codes) {
+        userOwnedToolRepository.deleteAllByUserId(userId);
+        userOwnedToolRepository.flush();
+        userOwnedToolRepository.saveAll(codes.stream()
+                .map(code -> new UserOwnedToolJpaEntity(userId, code)).toList());
     }
 
     private PersonalizationProfileJpaEntity toEntity(UserProfile profile) {

@@ -24,4 +24,5 @@ class SkinConcernJpaEntity {
     }
 
     String code() { return code; }
+    String name() { return name; }
 }

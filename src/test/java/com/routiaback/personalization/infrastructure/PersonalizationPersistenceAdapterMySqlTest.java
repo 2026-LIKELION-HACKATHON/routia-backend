@@ -106,4 +106,16 @@ class PersonalizationPersistenceAdapterMySqlTest {
         assertThat(adapter.findActiveSkinConcernCodes(Set.of("ACNE", "INACTIVE_SKIN", "UNKNOWN")))
                 .containsExactly("ACNE");
     }
+
+    @Test
+    void returnsExistingActiveConcernNamesForAiPersonalization() {
+        assertThat(adapter.findBodyConcernNames(List.of("FATIGUE", "SWELLING", "UNKNOWN")))
+                .containsExactlyEntriesOf(java.util.Map.of(
+                        "FATIGUE", "피로감",
+                        "SWELLING", "붓기"));
+        assertThat(adapter.findSkinConcernNames(List.of("PORE", "ACNE", "UNKNOWN")))
+                .containsExactlyEntriesOf(java.util.Map.of(
+                        "PORE", "모공",
+                        "ACNE", "여드름"));
+    }
 }

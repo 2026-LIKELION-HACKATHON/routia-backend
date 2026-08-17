@@ -26,6 +26,7 @@ class OnboardingProgressTest {
     @Test
     void completesStepsInOrder() {
         OnboardingProgress progress = OnboardingProgress.notStarted(1L, STEP1_AT)
+                .completeStep0(STEP1_AT)
                 .completeStep1(STEP1_AT)
                 .completeStep2(STEP2_AT)
                 .completeStep3(STEP3_AT);
@@ -46,7 +47,10 @@ class OnboardingProgressTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ONBOARDING_STEP_ORDER_INVALID);
 
-        OnboardingProgress step1 = initial.completeStep1(STEP1_AT);
+        assertThatThrownBy(() -> initial.completeStep1(STEP1_AT))
+                .isInstanceOf(ApiException.class);
+
+        OnboardingProgress step1 = initial.completeStep0(STEP1_AT).completeStep1(STEP1_AT);
         assertThatThrownBy(() -> step1.completeStep3(STEP3_AT))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode")
@@ -56,6 +60,7 @@ class OnboardingProgressTest {
     @Test
     void resubmittingEarlierStepDoesNotRegressProgressOrCompletionTime() {
         OnboardingProgress step2 = OnboardingProgress.notStarted(1L, STEP1_AT)
+                .completeStep0(STEP1_AT)
                 .completeStep1(STEP1_AT)
                 .completeStep2(STEP2_AT);
 
@@ -69,6 +74,7 @@ class OnboardingProgressTest {
     @Test
     void resubmittingDataAfterCompletionDoesNotRegressCompletedStatus() {
         OnboardingProgress completed = OnboardingProgress.notStarted(1L, STEP1_AT)
+                .completeStep0(STEP1_AT)
                 .completeStep1(STEP1_AT)
                 .completeStep2(STEP2_AT)
                 .completeStep3(STEP3_AT)
@@ -85,6 +91,7 @@ class OnboardingProgressTest {
     @Test
     void transitionsThroughGeneratingCompletedAndFailedStates() {
         OnboardingProgress step3 = OnboardingProgress.notStarted(1L, STEP1_AT)
+                .completeStep0(STEP1_AT)
                 .completeStep1(STEP1_AT)
                 .completeStep2(STEP2_AT)
                 .completeStep3(STEP3_AT);

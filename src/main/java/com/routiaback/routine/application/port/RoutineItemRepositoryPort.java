@@ -9,4 +9,5 @@ public interface RoutineItemRepositoryPort {
     Optional<RoutineItem> findItemById(Long itemId);
     RoutineItem save(RoutineItem item);
     List<RoutineItem> findAllByRoutineIds(List<Long> routineIds);
+    List<RoutineItem> saveAll(List<RoutineItem> items);
 }

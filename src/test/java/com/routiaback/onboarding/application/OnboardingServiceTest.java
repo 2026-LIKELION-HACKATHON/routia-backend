@@ -6,12 +6,18 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.given;
 
 import com.routiaback.global.error.ApiException;
 import com.routiaback.global.error.ErrorCode;
 import com.routiaback.notification.application.port.RoutineScheduleRepositoryPort;
 import com.routiaback.notification.domain.RoutineSchedule;
+import com.routiaback.notification.domain.RoutineGenerationScheduleCalculator;
+import com.routiaback.routine.application.generation.RoutineGenerationService;
+import com.routiaback.routine.application.generation.GeneratedRoutine;
+import com.routiaback.routine.domain.RoutineStatus;
 import com.routiaback.onboarding.application.command.Step1Command;
+import com.routiaback.onboarding.application.command.Step0Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
 import com.routiaback.onboarding.application.port.OnboardingProgressRepositoryPort;
@@ -20,12 +26,14 @@ import com.routiaback.onboarding.domain.OnboardingStatus;
 import com.routiaback.personalization.application.PersonalizationService;
 import com.routiaback.personalization.application.command.UpdateNeedsCommand;
 import com.routiaback.personalization.application.command.UpdateProfileCommand;
+import com.routiaback.personalization.application.command.ProfileImageUpload;
 import com.routiaback.personalization.domain.AgeGroup;
 import com.routiaback.personalization.domain.BodyGoal;
 import com.routiaback.personalization.domain.Gender;
 import com.routiaback.personalization.domain.RoutineDifficulty;
 import com.routiaback.personalization.domain.RoutineTimePreference;
 import com.routiaback.personalization.domain.SkinType;
+import com.routiaback.personalization.domain.LocationSource;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -43,30 +51,42 @@ class OnboardingServiceTest {
     private final PersonalizationService personalizationService = mock(PersonalizationService.class);
     private final FakeProgressRepository progressRepository = new FakeProgressRepository();
     private final FakeScheduleRepository scheduleRepository = new FakeScheduleRepository();
+    private final RoutineGenerationService routineGenerationService = mock(RoutineGenerationService.class);
     private OnboardingService service;
 
     @BeforeEach
     void setUp() {
         service = new OnboardingService(personalizationService, progressRepository, scheduleRepository,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), routineGenerationService,
+                new RoutineGenerationScheduleCalculator());
+    }
+
+    @Test
+    void step0UpdatesNameAndStartsOnboarding() {
+        ProfileImageUpload image = new ProfileImageUpload(
+                new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, "image/jpeg");
+        OnboardingProgress result = service.completeStep0(1L, new Step0Command("새 이름", image));
+
+        verify(personalizationService).updateUserName(1L, 1L, "새 이름");
+        verify(personalizationService).uploadProfileImage(1L, 1L, image);
+        assertThat(result.status()).isEqualTo(OnboardingStatus.IN_PROGRESS);
+        assertThat(result.lastCompletedStep()).isZero();
     }
 
     @Test
     void step1UpdatesExistingUserDataAndProgress() {
+        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW);
         OnboardingProgress result = service.completeStep1(1L, new Step1Command(
                 new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE, AgeGroup.TWENTIES,
-                List.of("SWELLING", "SWELLING", "FATIGUE"), BodyGoal.MAINTAIN));
+                "서울특별시", "중구", new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"), LocationSource.MANUAL));
 
         ArgumentCaptor<UpdateProfileCommand> profile = ArgumentCaptor.forClass(UpdateProfileCommand.class);
-        ArgumentCaptor<UpdateNeedsCommand> needs = ArgumentCaptor.forClass(UpdateNeedsCommand.class);
         verify(personalizationService).updateProfile(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(1L), profile.capture());
-        verify(personalizationService).updateNeeds(org.mockito.ArgumentMatchers.eq(1L),
-                org.mockito.ArgumentMatchers.eq(1L), needs.capture());
 
         assertThat(profile.getValue().height()).isEqualByComparingTo("165.5");
-        assertThat(needs.getValue().bodyGoal()).isEqualTo(BodyGoal.MAINTAIN);
-        assertThat(needs.getValue().bodyConcerns()).containsExactly("SWELLING", "SWELLING", "FATIGUE");
+        assertThat(profile.getValue().regionSido()).isEqualTo("서울특별시");
         assertThat(result.status()).isEqualTo(OnboardingStatus.IN_PROGRESS);
         assertThat(result.lastCompletedStep()).isEqualTo(1);
     }
@@ -74,6 +94,7 @@ class OnboardingServiceTest {
     @Test
     void resubmittingStep1AfterStep2UpdatesDataWithoutRegressingProgress() {
         progressRepository.progress = OnboardingProgress.notStarted(1L, NOW.minusSeconds(30))
+                .completeStep0(NOW.minusSeconds(25))
                 .completeStep1(NOW.minusSeconds(20))
                 .completeStep2(NOW.minusSeconds(10));
 
@@ -90,20 +111,23 @@ class OnboardingServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ONBOARDING_STEP_ORDER_INVALID);
 
-        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep1(NOW);
+        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW).completeStep1(NOW);
         OnboardingProgress result = service.completeStep2(
-                1L, new Step2Command(SkinType.DRY, List.of()));
+                1L, new Step2Command(SkinType.DRY, List.of(), List.of("FACE_FASCIA_TOOL"),
+                        List.of("SWELLING"), List.of(BodyGoal.MAINTAIN)));
 
         assertThat(result.lastCompletedStep()).isEqualTo(2);
         ArgumentCaptor<UpdateNeedsCommand> needs = ArgumentCaptor.forClass(UpdateNeedsCommand.class);
         verify(personalizationService).updateNeeds(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(1L), needs.capture());
         assertThat(needs.getValue().skinConcerns()).isEmpty();
+        assertThat(needs.getValue().bodyGoals()).containsExactly(BodyGoal.MAINTAIN);
+        assertThat(needs.getValue().ownedTools()).containsExactly("FACE_FASCIA_TOOL");
     }
 
     @Test
-    void step3RequiresStep2AndStoresPreferenceIndependentlyFromNotificationTime() {
-        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep1(NOW);
+    void step3RequiresStep2AndStoresOnlyRoutinePreference() {
+        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW).completeStep1(NOW);
 
         assertThatThrownBy(() -> service.completeStep3(1L, step3Command(LocalTime.of(10, 0))))
                 .isInstanceOf(ApiException.class)
@@ -114,31 +138,11 @@ class OnboardingServiceTest {
         OnboardingProgress result = service.completeStep3(1L, step3Command(LocalTime.of(10, 0)));
 
         assertThat(result.lastCompletedStep()).isEqualTo(3);
-        assertThat(scheduleRepository.schedule.notificationTime()).isEqualTo(LocalTime.of(10, 0));
-        assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T01:00:00Z"));
+        assertThat(scheduleRepository.schedule).isNull();
         ArgumentCaptor<UpdateNeedsCommand> needs = ArgumentCaptor.forClass(UpdateNeedsCommand.class);
         verify(personalizationService).updateNeeds(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.eq(1L), needs.capture());
         assertThat(needs.getValue().routineTimePreference()).isEqualTo(RoutineTimePreference.MORNING);
-    }
-
-    @Test
-    void calculatesNextScheduleOccurrenceInSeoulForPastTimeAndBoundaryTimes() {
-        progressRepository.progress = completedStep2();
-        service.completeStep3(1L, step3Command(LocalTime.of(8, 0)));
-        assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T23:00:00Z"));
-
-        progressRepository.progress = completedStep2();
-        service.completeStep3(1L, step3Command(LocalTime.MIDNIGHT));
-        assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T15:00:00Z"));
-
-        progressRepository.progress = completedStep2();
-        service.completeStep3(1L, step3Command(LocalTime.of(23, 59)));
-        assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T14:59:00Z"));
     }
 
     @Test
@@ -151,33 +155,87 @@ class OnboardingServiceTest {
 
     @Test
     void doesNotMarkStepCompleteWhenUserDataOrScheduleSaveFails() {
-        doThrow(new IllegalStateException("needs unavailable"))
-                .when(personalizationService).updateNeeds(any(), any(), any());
+        doThrow(new IllegalStateException("profile unavailable"))
+                .when(personalizationService).updateProfile(any(), any(), any());
+
+        progressRepository.progress = OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW);
 
         assertThatThrownBy(() -> service.completeStep1(1L, step1Command()))
                 .isInstanceOf(IllegalStateException.class);
-        assertThat(progressRepository.progress).isNull();
+        assertThat(progressRepository.progress.lastCompletedStep()).isZero();
 
         org.mockito.Mockito.reset(personalizationService);
         progressRepository.progress = completedStep2();
-        scheduleRepository.failSave = true;
+        doThrow(new IllegalStateException("needs unavailable"))
+                .when(personalizationService).updateNeeds(any(), any(), any());
 
         assertThatThrownBy(() -> service.completeStep3(1L, step3Command(LocalTime.NOON)))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(progressRepository.progress.lastCompletedStep()).isEqualTo(2);
     }
 
+    @Test
+    void completesOnboardingOnlyAfterInitialRoutineSucceeds() {
+        progressRepository.progress = completedStep2().completeStep3(NOW);
+        GeneratedRoutine generated = generatedRoutine();
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, true, generated));
+
+        OnboardingService.CompleteResult result = service.complete(1L);
+
+        assertThat(result.progress().status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(result.routine()).isEqualTo(generated);
+        assertThat(scheduleRepository.schedule.notificationEnabled()).isFalse();
+        assertThat(scheduleRepository.schedule.notificationTime()).isNull();
+        assertThat(scheduleRepository.schedule.nextGenerationAt())
+                .isEqualTo(Instant.parse("2026-08-15T21:00:00Z"));
+        verify(routineGenerationService).generate(org.mockito.ArgumentMatchers.eq(1L), any(),
+                org.mockito.ArgumentMatchers.eq(com.routiaback.routine.domain.RoutineGenerationType.INITIAL_ONBOARDING),
+                org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void returnsStoredRoutineWhenAlreadyCompletedWithoutRestartingProgress() {
+        progressRepository.progress = completedStep2().completeStep3(NOW)
+                .startGenerating(NOW.plusSeconds(1)).complete(NOW.plusSeconds(2));
+        GeneratedRoutine stored = generatedRoutine();
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willReturn(new RoutineGenerationService.GenerationOutcome(10L, RoutineStatus.READY, false, stored));
+
+        OnboardingService.CompleteResult result = service.complete(1L);
+
+        assertThat(result.progress().status()).isEqualTo(OnboardingStatus.COMPLETED);
+        assertThat(result.routine()).isEqualTo(stored);
+        assertThat(progressRepository.progress.status()).isEqualTo(OnboardingStatus.COMPLETED);
+    }
+
+    @Test
+    void marksOnboardingFailedWhenRoutineGenerationFails() {
+        progressRepository.progress = completedStep2().completeStep3(NOW);
+        given(routineGenerationService.generate(any(), any(), any(), any()))
+                .willThrow(new ApiException(ErrorCode.ROUTINE_GENERATION_FAILED));
+        assertThatThrownBy(() -> service.complete(1L)).isInstanceOf(ApiException.class);
+        assertThat(progressRepository.progress.status()).isEqualTo(OnboardingStatus.FAILED);
+    }
+
     private OnboardingProgress completedStep2() {
-        return OnboardingProgress.notStarted(1L, NOW).completeStep1(NOW).completeStep2(NOW);
+        return OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW).completeStep1(NOW).completeStep2(NOW);
     }
 
     private Step1Command step1Command() {
         return new Step1Command(new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE,
-                AgeGroup.TWENTIES, List.of("SWELLING"), BodyGoal.MAINTAIN);
+                AgeGroup.TWENTIES, "서울특별시", "중구", new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"), LocationSource.MANUAL);
     }
 
     private Step3Command step3Command(LocalTime notificationTime) {
         return new Step3Command(RoutineTimePreference.MORNING, RoutineDifficulty.SIMPLE, notificationTime);
+    }
+
+    private GeneratedRoutine generatedRoutine() {
+        return new GeneratedRoutine("방향", "홈 코멘트", List.of(
+                new GeneratedRoutine.GeneratedItem(
+                        "MORNING", "SKIN", "세안", "미온수로 세안", "CLEAN", "피부 청결")));
     }
 
     private static class FakeProgressRepository implements OnboardingProgressRepositoryPort {
@@ -212,5 +270,7 @@ class OnboardingServiceTest {
             this.schedule = schedule;
             return schedule;
         }
+
+        @Override public List<RoutineSchedule> findDueActive(Instant now) { return List.of(); }
     }
 }

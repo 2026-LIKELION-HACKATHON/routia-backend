@@ -37,12 +37,15 @@ public class RoutineService {
         List<RoutineItem> routineItems = routineItemRepository.findAllByRoutineIdOrderBySortOrder(dailyRoutine.id());
 
         List<Item> items = routineItems.stream()
-                .map(i -> new Item(i.id(), i.timeSlot(), i.title(), i.completed()))
+                .map(i -> new Item(
+                        i.id(), i.timeSlot(), i.category(), i.title(), i.detail(),
+                        i.effectCode(), i.expectedEffect(), i.sortOrder(), i.completed(), i.completedAt()))
                 .toList();
 
         int completedCount = (int) routineItems.stream().filter(RoutineItem::completed).count();
 
-        return new RoutineTodayResult(today, dailyRoutine.directionText(), dailyRoutine.homeComment(),
+        return new RoutineTodayResult(dailyRoutine.id(), today,
+                dailyRoutine.directionText(), dailyRoutine.homeComment(),
                 completedCount, routineItems.size(), items);
     }
 

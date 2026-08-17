@@ -12,6 +12,19 @@ public record UpdateNeedsCommand(
         SkinType skinType,
         List<String> skinConcerns,
         RoutineTimePreference routineTimePreference,
-        RoutineDifficulty routineDifficulty
+        RoutineDifficulty routineDifficulty,
+        List<BodyGoal> bodyGoals,
+        List<String> ownedTools
 ) {
+    public UpdateNeedsCommand {
+        bodyGoals = bodyGoals == null ? null : List.copyOf(bodyGoals);
+        ownedTools = ownedTools == null ? null : List.copyOf(ownedTools);
+    }
+
+    public UpdateNeedsCommand(BodyGoal bodyGoal, List<String> bodyConcerns, SkinType skinType,
+            List<String> skinConcerns, RoutineTimePreference routineTimePreference,
+            RoutineDifficulty routineDifficulty) {
+        this(bodyGoal, bodyConcerns, skinType, skinConcerns, routineTimePreference,
+                routineDifficulty, null, null);
+    }
 }

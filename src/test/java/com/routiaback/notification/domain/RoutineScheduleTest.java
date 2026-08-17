@@ -34,4 +34,19 @@ class RoutineScheduleTest {
         assertThat(updated.createdAt()).isEqualTo(NOW);
         assertThat(updated.updatedAt()).isEqualTo(NOW.plusSeconds(60));
     }
+
+    @Test
+    void createsGenerationScheduleWithoutNotificationAndPreservesTimeWhenDisabled() {
+        RoutineSchedule schedule = RoutineSchedule.createWithoutNotification(
+                1L, Instant.parse("2026-08-15T21:00:00Z"), NOW);
+        assertThat(schedule.notificationEnabled()).isFalse();
+        assertThat(schedule.notificationTime()).isNull();
+
+        RoutineSchedule enabled = schedule.updateNotification(true, LocalTime.of(8, 0),
+                Instant.parse("2026-08-15T22:50:00Z"), NOW.plusSeconds(1));
+        RoutineSchedule disabled = enabled.updateNotification(false, null,
+                Instant.parse("2026-08-15T22:50:00Z"), NOW.plusSeconds(2));
+        assertThat(disabled.notificationEnabled()).isFalse();
+        assertThat(disabled.notificationTime()).isEqualTo(LocalTime.of(8, 0));
+    }
 }

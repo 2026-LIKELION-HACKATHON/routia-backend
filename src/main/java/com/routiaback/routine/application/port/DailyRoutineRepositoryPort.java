@@ -9,4 +9,5 @@ public interface DailyRoutineRepositoryPort {
     Optional<DailyRoutine> findByUserIdAndRoutineDate(Long userId, LocalDate routineDate);
     Optional<DailyRoutine> findById(Long id);
     List<DailyRoutine> findAllByUserIdAndRoutineDateBetween(Long userId, LocalDate start, LocalDate end);
+    DailyRoutine save(DailyRoutine routine);
 }

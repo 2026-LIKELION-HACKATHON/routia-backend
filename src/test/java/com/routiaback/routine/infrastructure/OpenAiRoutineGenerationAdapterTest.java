@@ -65,7 +65,19 @@ class OpenAiRoutineGenerationAdapterTest {
         assertThat(body.path("text").path("format").path("type").asString()).isEqualTo("json_schema");
         assertThat(body.path("text").path("format").path("strict").asBoolean()).isTrue();
         assertThat(body.path("text").path("format").path("schema").path("additionalProperties").asBoolean()).isFalse();
+        JsonNode schemaProperties = body.path("text").path("format").path("schema").path("properties");
+        assertThat(schemaProperties.path("directionText").path("maxLength").asInt()).isEqualTo(1_000);
+        assertThat(schemaProperties.path("homeComment").path("maxLength").asInt()).isEqualTo(1_000);
+        JsonNode itemProperties = schemaProperties.path("items").path("items").path("properties");
+        assertThat(itemProperties.path("title").path("maxLength").asInt()).isEqualTo(150);
+        assertThat(itemProperties.path("detail").path("maxLength").asInt()).isEqualTo(4_000);
+        assertThat(itemProperties.path("effectCode").path("maxLength").asInt()).isEqualTo(30);
+        assertThat(itemProperties.path("expectedEffect").path("maxLength").asInt()).isEqualTo(255);
         assertThat(body.path("input").asString()).contains("2026-08-16");
+        assertThat(body.path("input").asString()).contains(
+                "\"weatherCondition\":\"구름 조금\"",
+                "\"bodyConcernNames\":{\"FATIGUE\":\"피로감\"}",
+                "\"skinConcernNames\":{\"DRYNESS\":\"건조함\"}");
         assertThat(result.directionText()).isEqualTo("가볍게 시작해요");
         assertThat(result.items()).singleElement().satisfies(item -> {
             assertThat(item.timeSlot()).isEqualTo("MORNING");
@@ -147,7 +159,9 @@ class OpenAiRoutineGenerationAdapterTest {
     private RoutineGenerationRequest request() {
         return new RoutineGenerationRequest(
                 LocalDate.of(2026, 8, 16), null, null,
-                new RoutineGenerationRequest.WeatherInput(27.0, 29.0, 1, 5.2),
+                java.util.Map.of("FATIGUE", "피로감"),
+                java.util.Map.of("DRYNESS", "건조함"),
+                new RoutineGenerationRequest.WeatherInput(27.0, 29.0, 1, "구름 조금", 5.2),
                 null);
     }
 

@@ -15,15 +15,15 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "push_devices", uniqueConstraints =
-        @UniqueConstraint(name = "uk_push_devices_token", columnNames = "token"))
+        @UniqueConstraint(name = "uk_push_devices_installation_id", columnNames = "firebase_installation_id"))
 class PushDeviceJpaEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(name = "user_id", nullable = false)
     private Long userId;
-    @Column(nullable = false, length = 512)
-    private String token;
+    @Column(name = "firebase_installation_id", nullable = false, length = 255)
+    private String installationId;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PushPlatform platform;
@@ -42,7 +42,7 @@ class PushDeviceJpaEntity {
     private PushDeviceJpaEntity(PushDevice device) {
         id = device.id();
         userId = device.userId();
-        token = device.token();
+        installationId = device.installationId();
         platform = device.platform();
         active = device.active();
         lastSeenAt = device.lastSeenAt();
@@ -55,6 +55,6 @@ class PushDeviceJpaEntity {
     }
 
     PushDevice toDomain() {
-        return new PushDevice(id, userId, token, platform, active, lastSeenAt, createdAt, updatedAt);
+        return new PushDevice(id, userId, installationId, platform, active, lastSeenAt, createdAt, updatedAt);
     }
 }

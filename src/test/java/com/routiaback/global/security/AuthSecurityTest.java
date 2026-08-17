@@ -82,7 +82,7 @@ class AuthSecurityTest {
 
 		mockMvc.perform(post("/api/v1/users/1/push-devices")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"token\":\"token\",\"platform\":\"WEB\"}"))
+				.content("{\"installationId\":\"test-fid\",\"platform\":\"WEB\"}"))
 			.andExpect(status().isUnauthorized());
 	}
 

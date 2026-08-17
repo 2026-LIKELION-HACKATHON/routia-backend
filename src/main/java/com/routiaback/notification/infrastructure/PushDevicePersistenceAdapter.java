@@ -2,6 +2,7 @@ package com.routiaback.notification.infrastructure;
 
 import com.routiaback.notification.application.port.PushDeviceRepositoryPort;
 import com.routiaback.notification.domain.PushDevice;
+import com.routiaback.notification.domain.PushPlatform;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -15,8 +16,8 @@ public class PushDevicePersistenceAdapter implements PushDeviceRepositoryPort {
     }
 
     @Override
-    public Optional<PushDevice> findByToken(String token) {
-        return repository.findByToken(token).map(PushDeviceJpaEntity::toDomain);
+    public Optional<PushDevice> findByInstallationId(String installationId) {
+        return repository.findByInstallationId(installationId).map(PushDeviceJpaEntity::toDomain);
     }
 
     @Override
@@ -26,7 +27,7 @@ public class PushDevicePersistenceAdapter implements PushDeviceRepositoryPort {
 
     @Override
     public List<PushDevice> findAllActiveByUserId(Long userId) {
-        return repository.findAllByUserIdAndActiveTrue(userId).stream()
+        return repository.findAllByUserIdAndActiveTrueAndPlatform(userId, PushPlatform.WEB).stream()
                 .map(PushDeviceJpaEntity::toDomain)
                 .toList();
     }

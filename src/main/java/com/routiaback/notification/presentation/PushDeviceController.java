@@ -36,10 +36,10 @@ public class PushDeviceController {
 
     @PostMapping
     @Operation(summary = "Web Push 기기 등록",
-            description = "브라우저가 발급받은 FCM registration token을 등록합니다. 같은 token은 재활성화되며 현재 사용자에게 소유권이 이전됩니다.")
+            description = "Frontend가 전달한 Firebase Installation ID를 등록합니다. 같은 FID는 재활성화되며 현재 사용자에게 소유권이 이전됩니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록 또는 재활성화 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 token 또는 platform",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 installationId 또는 platform",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "다른 사용자 접근")
@@ -47,7 +47,7 @@ public class PushDeviceController {
     public ApiResponse<DeviceResponse> register(@AuthenticationPrincipal Long authenticatedUserId,
             @PathVariable("id") Long userId, @Valid @RequestBody RegisterDeviceRequest request) {
         return ApiResponse.success(DeviceResponse.from(service.register(authenticatedUserId, userId,
-                request.token(), request.platform())));
+                request.installationId(), request.platform())));
     }
 
     @DeleteMapping("/{deviceId}")
@@ -67,10 +67,10 @@ public class PushDeviceController {
     }
 
     public record RegisterDeviceRequest(
-            @NotBlank @Size(max = 512)
-            @Schema(description = "브라우저 Firebase Messaging에서 발급받은 registration token",
-                    example = "FCM_WEB_REGISTRATION_TOKEN", writeOnly = true)
-            String token,
+            @NotBlank @Size(max = 255)
+            @Schema(description = "Frontend가 Firebase에서 획득한 Installation ID(FID)",
+                    example = "FIREBASE_INSTALLATION_ID", writeOnly = true)
+            String installationId,
             @NotNull
             @Schema(description = "웹 플랫폼", example = "WEB")
             PushPlatform platform

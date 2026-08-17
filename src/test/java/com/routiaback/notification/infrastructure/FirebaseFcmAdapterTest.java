@@ -9,6 +9,7 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.routiaback.notification.application.port.PushNotificationPort;
+import com.routiaback.notification.application.port.PushDeliveryErrorCode;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -22,35 +23,61 @@ class FirebaseFcmAdapterTest {
         given(messaging.send(any(Message.class))).willReturn("message-id");
 
         PushNotificationPort.DeliveryResult result = adapter.send(
-                "token", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
+                "test-fid", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
 
         assertThat(result.success()).isTrue();
     }
 
     @Test
-    void classifiesUnregisteredTokenAsPermanentFailure() throws Exception {
+    void classifiesUnregisteredFidAsPermanentFailure() throws Exception {
         FirebaseMessagingException exception = Mockito.mock(FirebaseMessagingException.class);
         given(exception.getMessagingErrorCode()).willReturn(MessagingErrorCode.UNREGISTERED);
         given(messaging.send(any(Message.class))).willThrow(exception);
 
         PushNotificationPort.DeliveryResult result = adapter.send(
-                "token", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
+                "test-fid", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
 
         assertThat(result.success()).isFalse();
         assertThat(result.permanentFailure()).isTrue();
-        assertThat(result.errorCode()).isEqualTo("UNREGISTERED");
+        assertThat(result.errorCode()).isEqualTo(PushDeliveryErrorCode.UNREGISTERED);
     }
 
     @Test
-    void keepsUnavailableTokenActiveForTransientFailure() throws Exception {
+    void keepsFidActiveForTransientFailure() throws Exception {
         FirebaseMessagingException exception = Mockito.mock(FirebaseMessagingException.class);
         given(exception.getMessagingErrorCode()).willReturn(MessagingErrorCode.UNAVAILABLE);
         given(messaging.send(any(Message.class))).willThrow(exception);
 
         PushNotificationPort.DeliveryResult result = adapter.send(
-                "token", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
+                "test-fid", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
 
         assertThat(result.permanentFailure()).isFalse();
-        assertThat(result.errorCode()).isEqualTo("UNAVAILABLE");
+        assertThat(result.errorCode()).isEqualTo(PushDeliveryErrorCode.TEMPORARY_FAILURE);
+    }
+
+    @Test
+    void classifiesInvalidArgumentAsInvalidTarget() throws Exception {
+        FirebaseMessagingException exception = Mockito.mock(FirebaseMessagingException.class);
+        given(exception.getMessagingErrorCode()).willReturn(MessagingErrorCode.INVALID_ARGUMENT);
+        given(messaging.send(any(Message.class))).willThrow(exception);
+
+        PushNotificationPort.DeliveryResult result = adapter.send(
+                "invalid-fid", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
+
+        assertThat(result.permanentFailure()).isTrue();
+        assertThat(result.errorCode()).isEqualTo(PushDeliveryErrorCode.INVALID_TARGET);
+    }
+
+    @Test
+    void classifiesFirebaseAuthenticationFailureWithoutDisablingFid() throws Exception {
+        FirebaseMessagingException exception = Mockito.mock(FirebaseMessagingException.class);
+        given(exception.getMessagingErrorCode()).willReturn(MessagingErrorCode.THIRD_PARTY_AUTH_ERROR);
+        given(messaging.send(any(Message.class))).willThrow(exception);
+
+        PushNotificationPort.DeliveryResult result = adapter.send(
+                "test-fid", "title", "body", Map.of("type", "DAILY_ROUTINE_READY"));
+
+        assertThat(result.permanentFailure()).isFalse();
+        assertThat(result.errorCode()).isEqualTo(PushDeliveryErrorCode.AUTH_FAILURE);
     }
 }

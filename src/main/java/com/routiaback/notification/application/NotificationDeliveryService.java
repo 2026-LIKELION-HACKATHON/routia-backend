@@ -1,6 +1,7 @@
 package com.routiaback.notification.application;
 
 import com.routiaback.notification.application.port.PushDeviceRepositoryPort;
+import com.routiaback.notification.application.port.PushDeliveryErrorCode;
 import com.routiaback.notification.application.port.PushNotificationPort;
 import com.routiaback.notification.application.port.RoutineScheduleRepositoryPort;
 import com.routiaback.notification.domain.NotificationType;
@@ -64,21 +65,21 @@ public class NotificationDeliveryService {
         }
         PushNotificationPort.DeliveryResult result;
         try {
-            result = sender.send(currentDevice.token(), RoutineReadyNotificationTemplate.TITLE,
+            result = sender.send(currentDevice.installationId(), RoutineReadyNotificationTemplate.TITLE,
                     RoutineReadyNotificationTemplate.BODY,
                     RoutineReadyNotificationTemplate.data(routine.id(), routine.routineDate()));
         } catch (RuntimeException exception) {
-            result = PushNotificationPort.DeliveryResult.failed("UNEXPECTED_PROVIDER_ERROR", false);
+            result = PushNotificationPort.DeliveryResult.failed(PushDeliveryErrorCode.UNKNOWN, false);
         }
         Instant completedAt = clock.instant();
         if (result.success()) {
             transactions.markSent(routine.id(), currentDevice.id(), TYPE, completedAt);
             return;
         }
-        transactions.markFailed(routine.id(), currentDevice.id(), TYPE, normalize(result.errorCode()),
+        transactions.markFailed(routine.id(), currentDevice.id(), TYPE, result.errorCode().name(),
                 result.permanentFailure(), currentDevice, completedAt);
         log.warn("Push delivery failed. routineId={} deviceId={} errorCode={}",
-                routine.id(), currentDevice.id(), normalize(result.errorCode()));
+                routine.id(), currentDevice.id(), result.errorCode().name());
     }
 
     private boolean notificationEnabled(Long userId) {
@@ -87,10 +88,4 @@ public class NotificationDeliveryService {
                 .orElse(false);
     }
 
-    private String normalize(String errorCode) {
-        if (errorCode == null || errorCode.isBlank()) {
-            return "UNKNOWN";
-        }
-        return errorCode.length() > 100 ? errorCode.substring(0, 100) : errorCode;
-    }
 }

@@ -46,29 +46,29 @@ class PushDeviceControllerTest {
     }
 
     @Test
-    void registersWebDeviceWithoutReturningToken() throws Exception {
-        given(service.register(1L, 1L, "web-token", PushPlatform.WEB)).willReturn(
+    void registersWebDeviceWithoutReturningInstallationId() throws Exception {
+        given(service.register(1L, 1L, "web-fid", PushPlatform.WEB)).willReturn(
                 new PushDeviceService.DeviceResult(10L, PushPlatform.WEB, true,
                         Instant.parse("2026-08-17T00:00:00Z")));
 
         mockMvc.perform(post("/api/v1/users/1/push-devices")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"web-token\",\"platform\":\"WEB\"}"))
+                        .content("{\"installationId\":\"web-fid\",\"platform\":\"WEB\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(10))
                 .andExpect(jsonPath("$.data.active").value(true))
-                .andExpect(jsonPath("$.data.token").doesNotExist());
+                .andExpect(jsonPath("$.data.installationId").doesNotExist());
     }
 
     @Test
-    void rejectsBlankTokenAndUnsupportedPlatform() throws Exception {
+    void rejectsBlankInstallationIdAndUnsupportedPlatform() throws Exception {
         mockMvc.perform(post("/api/v1/users/1/push-devices")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\" \",\"platform\":\"WEB\"}"))
+                        .content("{\"installationId\":\" \",\"platform\":\"WEB\"}"))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post("/api/v1/users/1/push-devices")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"token\",\"platform\":\"IOS\"}"))
+                        .content("{\"installationId\":\"test-fid\",\"platform\":\"IOS\"}"))
                 .andExpect(status().isBadRequest());
     }
 

@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PushDeviceService {
-    private static final int MAX_TOKEN_LENGTH = 512;
+    private static final int MAX_INSTALLATION_ID_LENGTH = 255;
 
     private final UserRepositoryPort users;
     private final PushDeviceRepositoryPort devices;
@@ -27,17 +27,19 @@ public class PushDeviceService {
     }
 
     @Transactional
-    public DeviceResult register(Long authenticatedUserId, Long userId, String token, PushPlatform platform) {
+    public DeviceResult register(Long authenticatedUserId, Long userId, String installationId,
+            PushPlatform platform) {
         validateUser(authenticatedUserId, userId);
-        String normalizedToken = token == null ? null : token.trim();
-        if (normalizedToken == null || normalizedToken.isEmpty() || normalizedToken.length() > MAX_TOKEN_LENGTH
+        String normalizedInstallationId = installationId == null ? null : installationId.trim();
+        if (normalizedInstallationId == null || normalizedInstallationId.isEmpty()
+                || normalizedInstallationId.length() > MAX_INSTALLATION_ID_LENGTH
                 || platform != PushPlatform.WEB) {
             throw new ApiException(ErrorCode.INVALID_PUSH_DEVICE);
         }
         Instant now = clock.instant();
-        PushDevice device = devices.findByToken(normalizedToken)
+        PushDevice device = devices.findByInstallationId(normalizedInstallationId)
                 .map(existing -> existing.claim(userId, platform, now))
-                .orElseGet(() -> PushDevice.register(userId, normalizedToken, platform, now));
+                .orElseGet(() -> PushDevice.register(userId, normalizedInstallationId, platform, now));
         return DeviceResult.from(devices.save(device));
     }
 

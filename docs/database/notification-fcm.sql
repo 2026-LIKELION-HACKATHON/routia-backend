@@ -1,14 +1,14 @@
 CREATE TABLE push_devices (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     user_id BIGINT UNSIGNED NOT NULL,
-    token VARCHAR(512) NOT NULL,
+    firebase_installation_id VARCHAR(255) NOT NULL,
     platform VARCHAR(20) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     last_seen_at DATETIME(6) NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
-    CONSTRAINT uk_push_devices_token UNIQUE (token),
+    CONSTRAINT uk_push_devices_installation_id UNIQUE (firebase_installation_id),
     INDEX idx_push_devices_user_active (user_id, is_active),
     CONSTRAINT fk_push_devices_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;

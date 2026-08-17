@@ -33,10 +33,10 @@ class PushDeviceServiceTest {
     }
 
     @Test
-    void registersAndReactivatesSameUserTokenWithoutDuplicateRow() {
-        PushDeviceService.DeviceResult first = service.register(1L, 1L, " token-1 ", PushPlatform.WEB);
+    void registersAndReactivatesSameUserFidWithoutDuplicateRow() {
+        PushDeviceService.DeviceResult first = service.register(1L, 1L, " fid-1 ", PushPlatform.WEB);
         service.deactivate(1L, 1L, first.id());
-        PushDeviceService.DeviceResult reactivated = service.register(1L, 1L, "token-1", PushPlatform.WEB);
+        PushDeviceService.DeviceResult reactivated = service.register(1L, 1L, "fid-1", PushPlatform.WEB);
 
         assertThat(devices.devices).hasSize(1);
         assertThat(reactivated.id()).isEqualTo(first.id());
@@ -44,17 +44,17 @@ class PushDeviceServiceTest {
     }
 
     @Test
-    void transfersTokenOwnershipToCurrentlyAuthenticatedUser() {
-        service.register(1L, 1L, "shared-token", PushPlatform.WEB);
+    void transfersFidOwnershipToCurrentlyAuthenticatedUser() {
+        service.register(1L, 1L, "shared-fid", PushPlatform.WEB);
 
-        service.register(2L, 2L, "shared-token", PushPlatform.WEB);
+        service.register(2L, 2L, "shared-fid", PushPlatform.WEB);
 
         assertThat(devices.devices).singleElement().extracting(PushDevice::userId).isEqualTo(2L);
     }
 
     @Test
-    void rejectsOtherUserAndInvalidToken() {
-        assertThatThrownBy(() -> service.register(1L, 2L, "token", PushPlatform.WEB))
+    void rejectsOtherUserAndInvalidFid() {
+        assertThatThrownBy(() -> service.register(1L, 2L, "test-fid", PushPlatform.WEB))
                 .isInstanceOf(ApiException.class).extracting("errorCode")
                 .isEqualTo(ErrorCode.USER_DATA_ACCESS_DENIED);
         assertThatThrownBy(() -> service.register(1L, 1L, " ", PushPlatform.WEB))
@@ -74,8 +74,8 @@ class PushDeviceServiceTest {
 
     private static class FakeDeviceRepository implements PushDeviceRepositoryPort {
         private final List<PushDevice> devices = new ArrayList<>();
-        @Override public Optional<PushDevice> findByToken(String token) {
-            return devices.stream().filter(device -> device.token().equals(token)).findFirst();
+        @Override public Optional<PushDevice> findByInstallationId(String installationId) {
+            return devices.stream().filter(device -> device.installationId().equals(installationId)).findFirst();
         }
         @Override public Optional<PushDevice> findByIdAndUserId(Long id, Long userId) {
             return devices.stream().filter(device -> device.id().equals(id) && device.userId().equals(userId)).findFirst();
@@ -85,7 +85,7 @@ class PushDeviceServiceTest {
         }
         @Override public PushDevice save(PushDevice device) {
             PushDevice saved = device.id() == null
-                    ? new PushDevice((long) devices.size() + 1, device.userId(), device.token(), device.platform(),
+                    ? new PushDevice((long) devices.size() + 1, device.userId(), device.installationId(), device.platform(),
                             device.active(), device.lastSeenAt(), device.createdAt(), device.updatedAt())
                     : device;
             devices.removeIf(existing -> existing.id().equals(saved.id()));

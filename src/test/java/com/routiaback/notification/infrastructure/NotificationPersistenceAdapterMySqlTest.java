@@ -56,21 +56,21 @@ class NotificationPersistenceAdapterMySqlTest {
     }
 
     @Test
-    void transfersGloballyUniqueTokenToLatestUser() {
-        PushDeviceService.DeviceResult first = devices.register(1L, 1L, "shared-token", PushPlatform.WEB);
-        PushDeviceService.DeviceResult second = devices.register(2L, 2L, "shared-token", PushPlatform.WEB);
+    void transfersGloballyUniqueFidToLatestUser() {
+        PushDeviceService.DeviceResult first = devices.register(1L, 1L, "shared-fid", PushPlatform.WEB);
+        PushDeviceService.DeviceResult second = devices.register(2L, 2L, "shared-fid", PushPlatform.WEB);
 
         assertThat(second.id()).isEqualTo(first.id());
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM push_devices", Integer.class))
                 .isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT user_id FROM push_devices WHERE token = 'shared-token'", Long.class))
+                "SELECT user_id FROM push_devices WHERE firebase_installation_id = 'shared-fid'", Long.class))
                 .isEqualTo(2L);
     }
 
     @Test
     void uniqueDeliveryReservationPreventsDuplicateNotificationLog() {
-        PushDeviceService.DeviceResult device = devices.register(1L, 1L, "token-1", PushPlatform.WEB);
+        PushDeviceService.DeviceResult device = devices.register(1L, 1L, "fid-1", PushPlatform.WEB);
         jdbcTemplate.update("""
                 INSERT INTO daily_routines
                     (id, user_id, routine_date, status, difficulty_snapshot,

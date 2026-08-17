@@ -66,7 +66,13 @@ ROUTINE_DEFAULT_TIMEZONE=Asia/Seoul
 
 ## DB Migration
 
-Production 배포 전에 [notification-fcm.sql](database/notification-fcm.sql)을 적용한다.
+신규 DB에는 [notification-fcm.sql](database/notification-fcm.sql)을 적용한다.
+
+이미 구형 `push_devices.fcm_token`이 존재하는 현재 RDS에는
+[notification-fcm-existing-rds.sql](database/notification-fcm-existing-rds.sql)을 한 번 적용한다.
+이 migration은 기존 컬럼을 `firebase_installation_id`로 변경하고 누락된
+`notification_logs`를 생성한다. 이미 존재하는
+`idx_daily_routines_status_notification` 인덱스는 재생성하지 않는다.
 
 - `push_devices.firebase_installation_id`는 FID를 저장한다.
 - FID는 전역 unique이므로 같은 브라우저가 다른 사용자에게 등록될 때 잘못된 사용자에게 Push가 전달되지 않는다.

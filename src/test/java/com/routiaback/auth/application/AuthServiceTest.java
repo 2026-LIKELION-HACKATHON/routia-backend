@@ -92,7 +92,7 @@ class AuthServiceTest {
 		verification = verification.verify("123456", passwordEncoder, clock.instant());
 		verifications.save(verification);
 
-		authService.signup(new SignupCommand(" User@Example.COM ", "secret", "Soeun"));
+		authService.signup(new SignupCommand(" User@Example.COM ", "secret", "secret", "Soeun"));
 
 		User saved = users.saved.getFirst();
 		assertThat(saved.email()).isEqualTo("user@example.com");
@@ -115,7 +115,7 @@ class AuthServiceTest {
 		Instant signupAt = verifiedAt.plusSeconds(120);
 		AuthService laterAuthService = authServiceAt(signupAt);
 
-		laterAuthService.signup(new SignupCommand("user@example.com", "secret", "Soeun"));
+		laterAuthService.signup(new SignupCommand("user@example.com", "secret", "secret", "Soeun"));
 
 		User saved = users.saved.getFirst();
 		assertThat(saved.emailVerifiedAt()).isEqualTo(verifiedAt);
@@ -134,11 +134,21 @@ class AuthServiceTest {
 		verifications.save(verification);
 		users.failOnSave = true;
 
-		assertThatThrownBy(() -> authService.signup(new SignupCommand("user@example.com", "secret", "Soeun")))
+		assertThatThrownBy(() -> authService.signup(new SignupCommand("user@example.com", "secret", "secret", "Soeun")))
 			.isInstanceOf(ApiException.class)
 			.extracting("errorCode")
 			.isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS);
 		assertThat(verifications.latest().consumedAt()).isNull();
+	}
+
+	@Test
+	void rejectsSignupWhenPasswordConfirmationDoesNotMatch() {
+		assertThatThrownBy(() -> authService.signup(
+			new SignupCommand("user@example.com", "secret", "different", "Soeun")))
+			.isInstanceOf(ApiException.class)
+			.extracting("errorCode")
+			.isEqualTo(ErrorCode.PASSWORD_CONFIRMATION_MISMATCH);
+		assertThat(users.saved).isEmpty();
 	}
 
 	@Test

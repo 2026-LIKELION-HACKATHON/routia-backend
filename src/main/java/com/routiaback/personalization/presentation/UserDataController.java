@@ -47,7 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/users/{id}")
-@Tag(name = "User Data", description = "사용자 프로필과 개인화 니즈 API")
+@Tag(name = "유조 데이터", description = "사용자 프로필과 개인화 니즈 API")
 @SecurityRequirement(name = "bearerAuth")
 public class UserDataController {
 

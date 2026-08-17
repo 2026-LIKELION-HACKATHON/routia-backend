@@ -46,7 +46,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/onboarding")
-@Tag(name = "Onboarding", description = "사용자 데이터 기반 단계별 온보딩 API")
+@Tag(name = "온보딩", description = "사용자 데이터 기반 단계별 온보딩 API")
 @SecurityRequirement(name = "bearerAuth")
 public class OnboardingController {
 

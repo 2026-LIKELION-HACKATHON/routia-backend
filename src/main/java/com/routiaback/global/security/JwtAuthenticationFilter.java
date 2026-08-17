@@ -22,6 +22,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	}
 
 	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) {
+		String path = request.getRequestURI().substring(request.getContextPath().length());
+		return path.equals("/swagger-ui.html")
+			|| path.startsWith("/swagger-ui/")
+			|| path.equals("/v3/api-docs")
+			|| path.startsWith("/v3/api-docs/");
+	}
+
+	@Override
 	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
 		String authorization = request.getHeader("Authorization");
 		if (authorization != null && authorization.startsWith("Bearer ")) {

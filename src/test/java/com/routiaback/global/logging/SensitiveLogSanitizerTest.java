@@ -9,14 +9,20 @@ class SensitiveLogSanitizerTest {
 	@Test
 	void masksEmailPasswordAndBearerToken() {
 		String sanitized = SensitiveLogSanitizer.sanitize(
-			"recipient=example@gmail.com password=secret Authorization: Bearer header.payload.signature"
+			"recipient=example@gmail.com password=secret passwordConfirm=confirmation "
+				+ "OPENAI_API_KEY=api-key FIREBASE_SERVICE_ACCOUNT_BASE64=encoded "
+				+ "Authorization: Bearer header.payload.signature"
 		);
 
 		assertThat(sanitized)
 			.contains("ex***@gmail.com")
 			.contains("password=***")
+			.contains("passwordConfirm=***")
+			.contains("OPENAI_API_KEY=***")
+			.contains("FIREBASE_SERVICE_ACCOUNT_BASE64=***")
 			.contains("Bearer ***")
-			.doesNotContain("example@gmail.com", "secret", "header.payload.signature");
+			.doesNotContain("example@gmail.com", "secret", "confirmation", "api-key", "encoded",
+				"header.payload.signature");
 	}
 
 	@Test

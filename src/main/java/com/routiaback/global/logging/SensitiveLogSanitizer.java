@@ -8,7 +8,10 @@ import java.util.regex.Pattern;
 public final class SensitiveLogSanitizer {
 
 	private static final Pattern EMAIL_PATTERN = Pattern.compile("([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})");
-	private static final Pattern PASSWORD_PATTERN = Pattern.compile("(?i)(password|passwd|pwd)(\\s*[=:]\\s*)[^\\s,;]+", Pattern.MULTILINE);
+	private static final Pattern SECRET_ASSIGNMENT_PATTERN = Pattern.compile(
+		"(?i)(\\\"?(?:password(?:confirm(?:ation)?)?|passwd|pwd|db[_-]?password|jwt[_-]?secret|openai[_-]?api[_-]?key|firebase[_-]?service[_-]?account[_-]?base64|private[_-]?key)\\\"?\\s*[=:]\\s*)(\\\"?)[^\\s,;\\\"}]+(\\\"?)",
+		Pattern.MULTILINE
+	);
 	private static final Pattern BEARER_PATTERN = Pattern.compile("(?i)(bearer\\s+)[A-Za-z0-9._~+/-]+=*");
 
 	private SensitiveLogSanitizer() {
@@ -34,8 +37,8 @@ public final class SensitiveLogSanitizer {
 		String maskedEmails = EMAIL_PATTERN.matcher(value).replaceAll(matchResult ->
 			maskEmail(matchResult.group())
 		);
-		String maskedPasswords = PASSWORD_PATTERN.matcher(maskedEmails).replaceAll("$1$2***");
-		return BEARER_PATTERN.matcher(maskedPasswords).replaceAll("$1***");
+		String maskedSecrets = SECRET_ASSIGNMENT_PATTERN.matcher(maskedEmails).replaceAll("$1$2***$3");
+		return BEARER_PATTERN.matcher(maskedSecrets).replaceAll("$1***");
 	}
 
 	public static Throwable rootCause(Throwable throwable) {

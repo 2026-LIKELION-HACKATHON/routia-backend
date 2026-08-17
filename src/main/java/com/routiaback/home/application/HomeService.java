@@ -29,7 +29,7 @@ public class HomeService {
         try {
             routine = routineService.getToday(userId);
         } catch (ApiException e) {
-            routine = new RoutineTodayResult(LocalDate.now(), null, null, 0, 0, List.of());
+            routine = new RoutineTodayResult(null, LocalDate.now(), null, null, 0, 0, List.of());
         }
 
         int progressPercent = routine.totalCount() == 0

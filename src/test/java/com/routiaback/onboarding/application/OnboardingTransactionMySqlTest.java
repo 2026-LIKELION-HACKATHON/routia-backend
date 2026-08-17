@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.routiaback.onboarding.application.command.Step1Command;
+import com.routiaback.onboarding.application.command.Step0Command;
 import com.routiaback.onboarding.application.command.Step2Command;
 import com.routiaback.onboarding.application.command.Step3Command;
 import com.routiaback.personalization.domain.AgeGroup;
@@ -12,8 +13,8 @@ import com.routiaback.personalization.domain.Gender;
 import com.routiaback.personalization.domain.RoutineDifficulty;
 import com.routiaback.personalization.domain.RoutineTimePreference;
 import com.routiaback.personalization.domain.SkinType;
+import com.routiaback.personalization.domain.LocationSource;
 import java.math.BigDecimal;
-import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,8 @@ class OnboardingTransactionMySqlTest {
         jdbcTemplate.update("DELETE FROM onboarding_progress");
         jdbcTemplate.update("DELETE FROM user_skin_concerns");
         jdbcTemplate.update("DELETE FROM user_body_concerns");
+        jdbcTemplate.update("DELETE FROM user_owned_tools");
+        jdbcTemplate.update("DELETE FROM user_body_goals");
         jdbcTemplate.update("DELETE FROM user_preferences");
         jdbcTemplate.update("DELETE FROM user_profiles");
         jdbcTemplate.update("DELETE FROM users");
@@ -78,25 +81,25 @@ class OnboardingTransactionMySqlTest {
     }
 
     @Test
-    void rollsBackEntireStep1WhenConcernPersistenceFails() {
+    void rollsBackEntireStep2WhenConcernPersistenceFails() {
+        completeThroughStep1();
         jdbcTemplate.execute("""
                 CREATE TRIGGER fail_body_concern BEFORE INSERT ON user_body_concerns
                 FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced body concern failure'
                 """);
 
-        assertThatThrownBy(() -> onboardingService.completeStep1(1L, step1Command()))
+        assertThatThrownBy(() -> onboardingService.completeStep2(1L, step2Command()))
                 .isInstanceOf(RuntimeException.class);
 
-        assertThat(count("user_profiles")).isZero();
         assertThat(count("user_preferences")).isZero();
         assertThat(count("user_body_concerns")).isZero();
-        assertThat(count("onboarding_progress")).isZero();
+        assertThat(lastCompletedStep()).isEqualTo(1);
     }
 
     @Test
     void restoresPreviousSkinConcernsWhenStep2ReplacementFails() {
-        onboardingService.completeStep1(1L, step1Command());
-        onboardingService.completeStep2(1L, new Step2Command(SkinType.DRY, List.of("ACNE")));
+        completeThroughStep1();
+        onboardingService.completeStep2(1L, step2Command());
         jdbcTemplate.execute("""
                 CREATE TRIGGER fail_skin_concern BEFORE INSERT ON user_skin_concerns
                 FOR EACH ROW BEGIN
@@ -120,16 +123,20 @@ class OnboardingTransactionMySqlTest {
     }
 
     @Test
-    void doesNotCompleteStep3WhenSchedulePersistenceFails() {
-        onboardingService.completeStep1(1L, step1Command());
-        onboardingService.completeStep2(1L, new Step2Command(SkinType.DRY, List.of("ACNE")));
+    void doesNotCompleteStep3WhenPreferencePersistenceFails() {
+        completeThroughStep1();
+        onboardingService.completeStep2(1L, step2Command());
         jdbcTemplate.execute("""
-                CREATE TRIGGER fail_schedule BEFORE INSERT ON routine_schedules
-                FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced schedule failure'
+                CREATE TRIGGER fail_preference BEFORE UPDATE ON user_preferences
+                FOR EACH ROW BEGIN
+                    IF NEW.routine_difficulty IS NOT NULL THEN
+                        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced preference failure';
+                    END IF;
+                END
                 """);
 
         assertThatThrownBy(() -> onboardingService.completeStep3(1L, new Step3Command(
-                RoutineTimePreference.MORNING, RoutineDifficulty.SIMPLE, LocalTime.of(10, 0))))
+                RoutineTimePreference.MORNING, RoutineDifficulty.SIMPLE)))
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(count("routine_schedules")).isZero();
@@ -138,7 +145,18 @@ class OnboardingTransactionMySqlTest {
 
     private Step1Command step1Command() {
         return new Step1Command(new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE,
-                AgeGroup.TWENTIES, List.of("SWELLING"), BodyGoal.MAINTAIN);
+                AgeGroup.TWENTIES, "서울특별시", "중구", new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"), LocationSource.MANUAL);
+    }
+
+    private Step2Command step2Command() {
+        return new Step2Command(SkinType.DRY, List.of("ACNE"), List.of("FACE_FASCIA_TOOL"),
+                List.of("SWELLING"), List.of(BodyGoal.MAINTAIN));
+    }
+
+    private void completeThroughStep1() {
+        onboardingService.completeStep0(1L, new Step0Command("Soeun", null));
+        onboardingService.completeStep1(1L, step1Command());
     }
 
     private int count(String table) {
@@ -154,5 +172,6 @@ class OnboardingTransactionMySqlTest {
         jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_body_concern");
         jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_skin_concern");
         jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_schedule");
+        jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_preference");
     }
 }

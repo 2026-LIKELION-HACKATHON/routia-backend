@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,6 +31,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockPart;
 
 @WebMvcTest(OnboardingController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -59,6 +61,24 @@ class OnboardingControllerTest {
     }
 
     @Test
+    void completesStep0WithNameAndOptionalProfileImage() throws Exception {
+        given(onboardingService.completeStep0(any(), any())).willReturn(step0());
+
+        mockMvc.perform(multipart("/api/v1/onboarding/step0")
+                        .part(new MockPart("userName", "소은".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.lastCompletedStep").value(0));
+    }
+
+    @Test
+    void rejectsBlankStep0Name() throws Exception {
+        mockMvc.perform(multipart("/api/v1/onboarding/step0")
+                        .part(new MockPart("userName", " ".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void completesStep1WithCurrentUserAndReturnsProgress() throws Exception {
         given(onboardingService.completeStep1(any(), any())).willReturn(step1());
 
@@ -70,8 +90,10 @@ class OnboardingControllerTest {
                                   "weight": 55.2,
                                   "gender": "FEMALE",
                                   "ageGroup": "TWENTIES",
-                                  "bodyConcerns": ["SWELLING", "FATIGUE"],
-                                  "bodyGoal": "MAINTAIN"
+                                  "regionSido": "서울특별시",
+                                  "regionSigungu": "중구",
+                                  "latitude": 37.5665,
+                                  "longitude": 126.9780
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -89,7 +111,13 @@ class OnboardingControllerTest {
         mockMvc.perform(post("/api/v1/onboarding/step2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"skinType":"DRY","skinConcerns":[]}
+                                {
+                                  "skinType":"DRY",
+                                  "skinConcerns":[],
+                                  "ownedTools":["FACE_FASCIA_TOOL"],
+                                  "bodyConcerns":["SWELLING"],
+                                  "bodyGoals":["MAINTAIN"]
+                                }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.lastCompletedStep").value(2));
@@ -106,8 +134,7 @@ class OnboardingControllerTest {
                         .content("""
                                 {
                                   "routineTimePreference":"EVENING",
-                                  "routineDifficulty":"MINIMAL",
-                                  "notificationTime":"23:59"
+                                  "routineDifficulty":"MINIMAL"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -138,21 +165,20 @@ class OnboardingControllerTest {
                                   "weight":55.2,
                                   "gender":"UNKNOWN",
                                   "ageGroup":"TWENTIES",
-                                  "bodyConcerns":[],
-                                  "bodyGoal":"MAINTAIN"
+                                  "regionSido":"서울특별시",
+                                  "regionSigungu":"중구",
+                                  "latitude":37.5665,
+                                  "longitude":126.9780
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
-        mockMvc.perform(post("/api/v1/onboarding/step3")
+        mockMvc.perform(post("/api/v1/onboarding/step2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {
-                                  "routineTimePreference":"MORNING",
-                                  "routineDifficulty":"SIMPLE",
-                                  "notificationTime":"24:00"
-                                }
+                                {"skinType":"DRY","skinConcerns":[],"ownedTools":[],
+                                 "bodyConcerns":[],"bodyGoals":[]}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -168,7 +194,10 @@ class OnboardingControllerTest {
                                   "weight":55.2,
                                   "gender":"FEMALE",
                                   "ageGroup":"TWENTIES",
-                                  "bodyGoal":"MAINTAIN"
+                                  "regionSido":"서울특별시",
+                                  "regionSigungu":"중구",
+                                  "latitude":37.5665,
+                                  "longitude":126.9780
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -202,7 +231,11 @@ class OnboardingControllerTest {
     }
 
     private OnboardingProgress step1() {
-        return OnboardingProgress.notStarted(1L, NOW).completeStep1(NOW);
+        return step0().completeStep1(NOW);
+    }
+
+    private OnboardingProgress step0() {
+        return OnboardingProgress.notStarted(1L, NOW).completeStep0(NOW);
     }
 
     private OnboardingProgress step2() {

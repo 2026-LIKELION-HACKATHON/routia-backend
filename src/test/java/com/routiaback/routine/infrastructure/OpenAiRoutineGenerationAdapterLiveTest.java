@@ -42,7 +42,7 @@ class OpenAiRoutineGenerationAdapterLiveTest {
         for (LiveCase liveCase : cases()) {
             GeneratedRoutine result = adapter.generate(liveCase.request());
 
-            validator.validate(result, liveCase.difficulty());
+            validator.validate(result, liveCase.difficulty(), liveCase.request().targetDistribution());
             assertThat(result.items()).hasSize(liveCase.targetCount());
             assertThat(result.items()).allSatisfy(item -> {
                 assertThat(item.title()).isNotBlank();
@@ -59,7 +59,7 @@ class OpenAiRoutineGenerationAdapterLiveTest {
         String model = setting("AI_MODEL", "gpt-5.6-luna");
         return new OpenAiRoutineGenerationAdapter(
                 objectMapper,
-                new PromptTemplateLoader(new ClassPathResource("prompts/routine-v2.txt"), "routine-v2"),
+                new PromptTemplateLoader(new ClassPathResource("prompts/routine-v2.txt"), "routine-v2-onboarding-v2"),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
                 URI.create("https://api.openai.com/v1/responses"),
                 setting("OPENAI_API_KEY", ""),
@@ -94,12 +94,13 @@ class OpenAiRoutineGenerationAdapterLiveTest {
                         java.util.stream.Collectors.counting()));
         if (liveCase.timePreference() == RoutineTimePreference.MORNING) {
             assertThat(counts.getOrDefault("MORNING", 0L))
-                    .isGreaterThanOrEqualTo(liveCase.targetCount() / 2L);
+                    .isGreaterThanOrEqualTo(Math.round(liveCase.targetCount() * 2.0 / 3.0) - 1);
         }
         if (liveCase.timePreference() == RoutineTimePreference.EVENING) {
             long eveningAndBedtime = counts.getOrDefault("EVENING", 0L)
                     + counts.getOrDefault("BEDTIME", 0L);
-            assertThat(eveningAndBedtime).isGreaterThanOrEqualTo(liveCase.targetCount() / 2L);
+            assertThat(eveningAndBedtime)
+                    .isGreaterThanOrEqualTo(Math.round(liveCase.targetCount() * 2.0 / 3.0) - 1);
             assertThat(eveningAndBedtime).isLessThan(liveCase.targetCount());
         }
     }
@@ -134,23 +135,26 @@ class OpenAiRoutineGenerationAdapterLiveTest {
             RoutineTimePreference timePreference,
             RoutineGenerationRequest.WeatherInput weather,
             RoutineGenerationRequest.PerformanceInput performance) {
-        ProfileResult profile = new ProfileResult(
-                new BigDecimal("165.3"), new BigDecimal("55.2"), Gender.FEMALE, AgeGroup.TWENTIES,
-                null, "서울특별시", "중구", new BigDecimal("37.5665"),
-                new BigDecimal("126.9780"), null, null);
         NeedsResult needs = new NeedsResult(
                 BodyGoal.BUILD_HABIT,
-                List.of("SHOULDER_NECK", "LOWER_BODY_SWELLING"),
+                List.of(BodyGoal.BUILD_HABIT, BodyGoal.REGULAR_LIFE),
+                List.of("FATIGUE", "SWELLING"),
                 SkinType.COMBINATION,
-                List.of("DRYNESS", "PORES"),
+                List.of("ELASTICITY", "PORE"),
+                List.of("FACE_FASCIA_TOOL"),
                 timePreference,
                 RoutineDifficulty.SIMPLE);
         return new RoutineGenerationRequest(
                 LocalDate.of(2026, 8, 17),
-                profile,
+                new RoutineGenerationRequest.ProfileInput(
+                        new BigDecimal("165.3"), new BigDecimal("55.2"), Gender.FEMALE, AgeGroup.TWENTIES),
                 needs,
-                Map.of("SHOULDER_NECK", "어깨·목 긴장", "LOWER_BODY_SWELLING", "하체 붓기"),
-                Map.of("DRYNESS", "건조함", "PORES", "모공"),
+                Map.of("BUILD_HABIT", "생활 습관 형성", "REGULAR_LIFE", "규칙적인 생활"),
+                Map.of("FATIGUE", "피로감", "SWELLING", "붓기"),
+                Map.of("ELASTICITY", "탄력", "PORE", "모공"),
+                Map.of("FACE_FASCIA_TOOL", "페이스 괄사"),
+                com.routiaback.routine.application.generation.RoutineDistributionPolicy.calculate(
+                        RoutineDifficulty.SIMPLE, timePreference),
                 weather,
                 performance);
     }

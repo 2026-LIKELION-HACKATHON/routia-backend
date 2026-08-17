@@ -16,4 +16,9 @@ class RoutineGenerationSchedulerTest {
         new RoutineGenerationScheduler(schedules,generation,new RoutineGenerationScheduleCalculator(),Clock.fixed(now,ZoneOffset.UTC)).generateDue();
         then(generation).should().generate(eq(2L),eq(LocalDate.of(2026,8,15)),eq(RoutineGenerationType.SCHEDULED_DAILY),eq(Instant.parse("2026-08-15T00:10:00Z")));assertThat(saved).hasSize(2).allMatch(s->s.nextGenerationAt().equals(Instant.parse("2026-08-16T00:00:00Z")));
     }
+
+    @Test void generatesWithoutNotificationForUnconfiguredUser(){Instant now=Instant.parse("2026-08-15T21:00:00Z");RoutineScheduleRepositoryPort schedules=org.mockito.Mockito.mock(RoutineScheduleRepositoryPort.class);RoutineGenerationService generation=org.mockito.Mockito.mock(RoutineGenerationService.class);RoutineSchedule schedule=RoutineSchedule.createWithoutNotification(1L,now,now.minusSeconds(60));given(schedules.findDueActive(now)).willReturn(List.of(schedule));given(schedules.save(any())).willAnswer(i->i.getArgument(0));
+        new RoutineGenerationScheduler(schedules,generation,new RoutineGenerationScheduleCalculator(),Clock.fixed(now,ZoneOffset.UTC)).generateDue();
+        then(generation).should().generate(1L,LocalDate.of(2026,8,16),RoutineGenerationType.SCHEDULED_DAILY,null);
+    }
 }

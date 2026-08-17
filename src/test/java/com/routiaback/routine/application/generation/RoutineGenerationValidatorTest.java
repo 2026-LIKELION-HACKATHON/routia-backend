@@ -3,6 +3,7 @@ package com.routiaback.routine.application.generation;
 import static org.assertj.core.api.Assertions.*;
 import com.routiaback.global.error.ApiException;
 import com.routiaback.personalization.domain.RoutineDifficulty;
+import com.routiaback.personalization.domain.RoutineTimePreference;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +54,22 @@ class RoutineGenerationValidatorTest {
         assertThatThrownBy(() -> validator.validate(
                 new GeneratedRoutine("d", "h", List.of(item("detail", "EFFECT", "e".repeat(256)))),
                 RoutineDifficulty.SIMPLE)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void rejectsFullRoutineThatClearlyViolatesTargetDistribution() {
+        var distribution = RoutineDistributionPolicy.calculate(
+                RoutineDifficulty.SIMPLE, RoutineTimePreference.MORNING);
+        assertThatThrownBy(() -> validator.validate(routine(8), RoutineDifficulty.SIMPLE, distribution))
+                .isInstanceOf(ApiException.class);
+
+        List<GeneratedRoutine.GeneratedItem> items = new ArrayList<>();
+        for (int i = 0; i < 5; i++) items.add(new GeneratedRoutine.GeneratedItem(
+                "MORNING", "SKIN", "morning" + i, "detail", "EFFECT", "expected"));
+        for (int i = 0; i < 3; i++) items.add(new GeneratedRoutine.GeneratedItem(
+                "EVENING", "BODY", "evening" + i, "detail", "EFFECT", "expected"));
+        assertThatCode(() -> validator.validate(new GeneratedRoutine("d", "h", items),
+                RoutineDifficulty.SIMPLE, distribution)).doesNotThrowAnyException();
     }
 
     private GeneratedRoutine routine(int count){List<GeneratedRoutine.GeneratedItem> items=new ArrayList<>();for(int i=0;i<count;i++)items.add(new GeneratedRoutine.GeneratedItem("MORNING","SKIN","item"+i,"detail","EFFECT","expected"));return new GeneratedRoutine("direction","comment",items);}

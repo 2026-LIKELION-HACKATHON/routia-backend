@@ -47,7 +47,7 @@ ROUTINE_GENERATION_LEAD_MINUTES=10
 ROUTINE_DEFAULT_GENERATION_TIME=06:00
 ROUTINE_DEFAULT_TIMEZONE=Asia/Seoul
 
-CORS_ALLOWED_ORIGINS=https://<FRONTEND_PRODUCTION_DOMAIN>
+CORS_ALLOWED_ORIGINS=*
 PROFILE_IMAGE_DIRECTORY=/tmp/routia-profile-images
 ```
 
@@ -57,7 +57,7 @@ PROFILE_IMAGE_DIRECTORY=/tmp/routia-profile-images
 CORS_ALLOWED_ORIGINS=https://www.example.com,https://example.com
 ```
 
-Production에는 `*` 또는 localhost를 넣지 않는다. Preview 도메인이 필요하면 명시적인 HTTPS Origin으로 추가한다.
+Frontend가 구현되기 전까지는 임시 정책으로 `*`를 사용한다. 현재 Bearer Header 인증이며 `allowCredentials=false`이므로 wildcard를 적용할 수 있다. Frontend 배포 후에는 즉시 실제 HTTPS Origin allowlist로 교체한다.
 
 ## Cloudtype Secrets
 
@@ -149,7 +149,7 @@ curl --fail http://localhost:8080/actuator/health
 
 ## 운영 전 확인 사항
 
-1. 실제 Frontend Production Domain을 `CORS_ALLOWED_ORIGINS`에 입력한다.
+1. Frontend 배포 후 `CORS_ALLOWED_ORIGINS=*`를 실제 Production Domain allowlist로 교체한다.
 2. RDS 스키마와 Security Group 접근을 확인한다.
 3. 모든 Cloudtype Secret을 등록한다.
 4. Dockerfile의 Publish Port를 8080으로 설정한다.

@@ -1,7 +1,6 @@
 package com.routiaback.global.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -15,16 +14,12 @@ class CorsConfigTest {
 	}
 
 	@Test
-	void rejectsWildcardOrigin() {
-		assertThatThrownBy(() -> CorsConfig.parseAllowedOrigins("*"))
-			.isInstanceOf(IllegalStateException.class)
-			.hasMessageContaining("explicit allowlist");
+	void acceptsTemporaryWildcardOriginPolicy() {
+		assertThat(CorsConfig.parseAllowedOrigins("*")).containsExactly("*");
 	}
 
 	@Test
-	void rejectsEmptyOriginConfiguration() {
-		assertThatThrownBy(() -> CorsConfig.parseAllowedOrigins("  "))
-			.isInstanceOf(IllegalStateException.class)
-			.hasMessageContaining("At least one");
+	void usesDenyAllPolicyWhenNoFrontendOriginIsConfigured() {
+		assertThat(CorsConfig.parseAllowedOrigins("  ")).isEmpty();
 	}
 }

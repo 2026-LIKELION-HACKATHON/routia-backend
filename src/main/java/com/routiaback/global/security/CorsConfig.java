@@ -34,16 +34,13 @@ public class CorsConfig {
 
 	static List<String> parseAllowedOrigins(String value) {
 		if (value == null || value.isBlank()) {
-			throw new IllegalStateException("At least one CORS allowed origin must be configured");
+			return List.of();
 		}
 		List<String> origins = Arrays.stream(value.split(","))
 			.map(String::trim)
 			.filter(origin -> !origin.isEmpty())
 			.distinct()
 			.toList();
-		if (origins.isEmpty() || origins.contains("*")) {
-			throw new IllegalStateException("CORS allowed origins must be an explicit allowlist");
-		}
 		return origins;
 	}
 }

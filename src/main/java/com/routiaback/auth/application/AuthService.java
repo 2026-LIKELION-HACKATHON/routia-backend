@@ -19,6 +19,7 @@ import com.routiaback.global.error.ErrorCode;
 import com.routiaback.global.logging.SensitiveLogSanitizer;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -112,6 +113,10 @@ public class AuthService {
 
 	@Transactional
 	public void signup(SignupCommand command) {
+		if (!Objects.equals(command.password(), command.passwordConfirm())) {
+			throw new ApiException(ErrorCode.PASSWORD_CONFIRMATION_MISMATCH);
+		}
+
 		String email = emailNormalizer.normalize(command.email());
 		if (userRepository.existsByEmail(email)) {
 			throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);

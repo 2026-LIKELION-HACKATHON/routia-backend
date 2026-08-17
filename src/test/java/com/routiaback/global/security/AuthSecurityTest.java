@@ -63,7 +63,7 @@ class AuthSecurityTest {
 		mockMvc.perform(post("/api/v1/auth/signup")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"email":"user@example.com","password":"secret","name":"Soeun"}
+					{"email":"user@example.com","password":"secret","passwordConfirm":"secret","name":"Soeun"}
 					"""))
 			.andExpect(status().isCreated());
 

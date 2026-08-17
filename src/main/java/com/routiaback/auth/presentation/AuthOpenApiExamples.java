@@ -20,6 +20,9 @@ final class AuthOpenApiExamples {
 	static final String EMAIL_NOT_VERIFIED = """
 		{"code":"EMAIL_NOT_VERIFIED","message":"이메일 인증이 필요합니다.","fieldErrors":[]}
 		""";
+	static final String PASSWORD_CONFIRMATION_MISMATCH = """
+		{"code":"PASSWORD_CONFIRMATION_MISMATCH","message":"비밀번호와 비밀번호 확인이 일치하지 않습니다.","fieldErrors":[]}
+		""";
 	static final String EMAIL_ALREADY_EXISTS = """
 		{"code":"EMAIL_ALREADY_EXISTS","message":"이미 사용 중인 이메일입니다.","fieldErrors":[]}
 		""";

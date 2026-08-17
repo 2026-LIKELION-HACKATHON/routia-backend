@@ -126,14 +126,15 @@ public class AuthController {
 	@ResponseStatus(HttpStatus.CREATED)
 	@Operation(
 		summary = "회원가입",
-		description = "검증 완료된 최신 이메일 인증정보를 소비하고 ACTIVE 사용자를 생성합니다. 비밀번호는 BCrypt hash로 저장합니다."
+		description = "비밀번호 확인 일치 여부를 검증한 뒤 검증 완료된 최신 이메일 인증정보를 소비하고 ACTIVE 사용자를 생성합니다. 비밀번호는 BCrypt hash로 저장합니다."
 	)
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "회원가입 성공"),
 		@ApiResponse(
 			responseCode = "400",
-			description = "이메일 미인증 또는 인증 만료",
+			description = "비밀번호 확인 불일치, 이메일 미인증 또는 인증 만료",
 			content = @Content(schema = @Schema(implementation = ErrorResponse.class), examples = {
+				@ExampleObject(name = "PASSWORD_CONFIRMATION_MISMATCH", value = AuthOpenApiExamples.PASSWORD_CONFIRMATION_MISMATCH),
 				@ExampleObject(name = "EMAIL_NOT_VERIFIED", value = AuthOpenApiExamples.EMAIL_NOT_VERIFIED),
 				@ExampleObject(name = "EMAIL_VERIFICATION_EXPIRED", value = AuthOpenApiExamples.VERIFICATION_EXPIRED)
 			})
@@ -146,7 +147,7 @@ public class AuthController {
 		)
 	})
 	public void signup(@Valid @RequestBody SignupRequest request) {
-		authService.signup(new SignupCommand(request.email(), request.password(), request.name()));
+		authService.signup(new SignupCommand(request.email(), request.password(), request.passwordConfirm(), request.name()));
 	}
 
 	@PostMapping("/login")
@@ -214,6 +215,9 @@ public class AuthController {
 		@NotBlank
 		@Schema(description = "로그인 비밀번호. 현재 길이 정책은 미확정", example = "routia-password", writeOnly = true, requiredMode = Schema.RequiredMode.REQUIRED)
 		String password,
+		@NotBlank
+		@Schema(description = "로그인 비밀번호 확인", example = "routia-password", writeOnly = true, requiredMode = Schema.RequiredMode.REQUIRED)
+		String passwordConfirm,
 		@NotBlank
 		@Schema(description = "사용자 이름", example = "김루티", maxLength = 50, requiredMode = Schema.RequiredMode.REQUIRED)
 		String name

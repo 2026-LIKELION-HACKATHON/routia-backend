@@ -136,12 +136,12 @@ class AuthControllerTest {
 		mockMvc.perform(post("/api/v1/auth/signup")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"email":"user@example.com","password":"secret","name":"Soeun"}
+					{"email":"user@example.com","password":"secret","passwordConfirm":"secret","name":"Soeun"}
 					"""))
 			.andExpect(status().isCreated());
 
 		then(authService).should()
-			.signup(new SignupCommand("user@example.com", "secret", "Soeun"));
+			.signup(new SignupCommand("user@example.com", "secret", "secret", "Soeun"));
 	}
 
 	@Test
@@ -149,7 +149,17 @@ class AuthControllerTest {
 		mockMvc.perform(post("/api/v1/auth/signup")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"email":"user@example.com","password":"secret"}
+					{"email":"user@example.com","password":"secret","passwordConfirm":"secret"}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void rejectsSignupWithoutPasswordConfirmation() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/signup")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"email":"user@example.com","password":"secret","name":"Soeun"}
 					"""))
 			.andExpect(status().isBadRequest());
 	}

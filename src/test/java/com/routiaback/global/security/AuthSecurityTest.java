@@ -79,6 +79,11 @@ class AuthSecurityTest {
 	void rejectsProtectedEndpointWithoutTokenAsUnauthorized() throws Exception {
 		mockMvc.perform(get("/api/v1/onboarding/progress"))
 			.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(post("/api/v1/users/1/push-devices")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"token\":\"token\",\"platform\":\"WEB\"}"))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test

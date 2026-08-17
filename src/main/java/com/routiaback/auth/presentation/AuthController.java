@@ -35,7 +35,7 @@ import org.springframework.validation.annotation.Validated;
 @RestController
 @Validated
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Auth", description = "이메일 인증, 회원가입, 로그인 API")
+@Tag(name = "인증", description = "이메일 인증, 회원가입, 로그인 API")
 public class AuthController {
 
 	private static final Logger log = LoggerFactory.getLogger(AuthController.class);

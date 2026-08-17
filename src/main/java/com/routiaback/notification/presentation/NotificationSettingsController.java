@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/users/{id}/notification-settings")
-@Tag(name = "Notification Settings", description = "My Page 알림 설정 API")
+@Tag(name = "알림 설정", description = "My Page 알림 설정 API")
 @SecurityRequirement(name = "bearerAuth")
 public class NotificationSettingsController {
     private final NotificationSettingsService service;

@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/users/{id}/push-devices")
-@Tag(name = "Push Device", description = "Web FCM 기기 토큰 관리 API")
+@Tag(name = "알림", description = "Web FCM 기기 토큰 관리 API")
 @SecurityRequirement(name = "bearerAuth")
 public class PushDeviceController {
     private final PushDeviceService service;

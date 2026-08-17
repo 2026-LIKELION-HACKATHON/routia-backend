@@ -51,6 +51,7 @@ class NotificationDeliveryServiceTest {
     void sendsExpectedPayloadAndMarksLogSent() {
         PushDevice device = device(10L, "token-1");
         given(devices.findAllActiveByUserId(1L)).willReturn(List.of(device));
+        given(devices.findByIdAndUserId(10L, 1L)).willReturn(Optional.of(device));
         given(transactions.reserve(100L, 10L, NotificationType.DAILY_ROUTINE_READY, NOW)).willReturn(true);
         given(sender.send(eq("token-1"), any(), any(), anyMap()))
                 .willReturn(PushNotificationPort.DeliveryResult.sent());
@@ -75,6 +76,7 @@ class NotificationDeliveryServiceTest {
         given(schedules.findByUserId(1L)).willReturn(Optional.of(
                 RoutineSchedule.create(1L, LocalTime.of(9, 0), NOW, NOW)));
         given(devices.findAllActiveByUserId(1L)).willReturn(List.of(device(10L, "token-1")));
+        given(devices.findByIdAndUserId(10L, 1L)).willReturn(Optional.of(device(10L, "token-1")));
         given(transactions.reserve(any(), any(), any(), any())).willReturn(false);
         service.deliver(routine());
         then(sender).should(never()).send(any(), any(), any(), anyMap());
@@ -85,6 +87,8 @@ class NotificationDeliveryServiceTest {
         PushDevice first = device(10L, "invalid-token");
         PushDevice second = device(11L, "valid-token");
         given(devices.findAllActiveByUserId(1L)).willReturn(List.of(first, second));
+        given(devices.findByIdAndUserId(10L, 1L)).willReturn(Optional.of(first));
+        given(devices.findByIdAndUserId(11L, 1L)).willReturn(Optional.of(second));
         given(transactions.reserve(eq(100L), any(), any(), eq(NOW))).willReturn(true);
         given(sender.send(eq("invalid-token"), any(), any(), anyMap()))
                 .willReturn(PushNotificationPort.DeliveryResult.failed("UNREGISTERED", true));
@@ -105,6 +109,8 @@ class NotificationDeliveryServiceTest {
         PushDevice first = device(10L, "first-token");
         PushDevice second = device(11L, "second-token");
         given(devices.findAllActiveByUserId(1L)).willReturn(List.of(first, second));
+        given(devices.findByIdAndUserId(10L, 1L)).willReturn(Optional.of(first));
+        given(devices.findByIdAndUserId(11L, 1L)).willReturn(Optional.of(second));
         given(transactions.reserve(100L, 10L, NotificationType.DAILY_ROUTINE_READY, NOW))
                 .willThrow(new IllegalStateException("database error"));
         given(transactions.reserve(100L, 11L, NotificationType.DAILY_ROUTINE_READY, NOW)).willReturn(true);
@@ -115,6 +121,18 @@ class NotificationDeliveryServiceTest {
 
         then(transactions).should().markSent(100L, 11L,
                 NotificationType.DAILY_ROUTINE_READY, NOW);
+    }
+
+    @Test
+    void skipsStaleDeviceSnapshotAfterTokenOwnershipChanged() {
+        PushDevice stale = device(10L, "transferred-token");
+        given(devices.findAllActiveByUserId(1L)).willReturn(List.of(stale));
+        given(devices.findByIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+
+        service.deliver(routine());
+
+        then(transactions).should(never()).reserve(any(), any(), any(), any());
+        then(sender).should(never()).send(any(), any(), any(), anyMap());
     }
 
     private PushDevice device(Long id, String token) {

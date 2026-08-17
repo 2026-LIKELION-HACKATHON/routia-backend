@@ -52,13 +52,19 @@ public class NotificationDeliveryService {
         if (!notificationEnabled(routine.userId())) {
             return;
         }
+        PushDevice currentDevice = devices.findByIdAndUserId(device.id(), routine.userId())
+                .filter(PushDevice::active)
+                .orElse(null);
+        if (currentDevice == null) {
+            return;
+        }
         Instant now = clock.instant();
-        if (!transactions.reserve(routine.id(), device.id(), TYPE, now)) {
+        if (!transactions.reserve(routine.id(), currentDevice.id(), TYPE, now)) {
             return;
         }
         PushNotificationPort.DeliveryResult result;
         try {
-            result = sender.send(device.token(), RoutineReadyNotificationTemplate.TITLE,
+            result = sender.send(currentDevice.token(), RoutineReadyNotificationTemplate.TITLE,
                     RoutineReadyNotificationTemplate.BODY,
                     RoutineReadyNotificationTemplate.data(routine.id(), routine.routineDate()));
         } catch (RuntimeException exception) {
@@ -66,13 +72,13 @@ public class NotificationDeliveryService {
         }
         Instant completedAt = clock.instant();
         if (result.success()) {
-            transactions.markSent(routine.id(), device.id(), TYPE, completedAt);
+            transactions.markSent(routine.id(), currentDevice.id(), TYPE, completedAt);
             return;
         }
-        transactions.markFailed(routine.id(), device.id(), TYPE, normalize(result.errorCode()),
-                result.permanentFailure(), device, completedAt);
+        transactions.markFailed(routine.id(), currentDevice.id(), TYPE, normalize(result.errorCode()),
+                result.permanentFailure(), currentDevice, completedAt);
         log.warn("Push delivery failed. routineId={} deviceId={} errorCode={}",
-                routine.id(), device.id(), normalize(result.errorCode()));
+                routine.id(), currentDevice.id(), normalize(result.errorCode()));
     }
 
     private boolean notificationEnabled(Long userId) {

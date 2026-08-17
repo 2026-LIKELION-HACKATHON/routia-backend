@@ -1,0 +1,327 @@
+package com.routiaback.personalization.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.routiaback.auth.application.port.UserRepositoryPort;
+import com.routiaback.auth.domain.User;
+import com.routiaback.global.error.ApiException;
+import com.routiaback.global.error.ErrorCode;
+import com.routiaback.personalization.application.command.ProfileImageUpload;
+import com.routiaback.personalization.application.command.UpdateNeedsCommand;
+import com.routiaback.personalization.application.command.UpdateProfileCommand;
+import com.routiaback.personalization.application.port.ProfileImageStoragePort;
+import com.routiaback.personalization.application.port.UserNeedsRepositoryPort;
+import com.routiaback.personalization.application.port.UserProfileRepositoryPort;
+import com.routiaback.personalization.application.result.NeedsResult;
+import com.routiaback.personalization.application.result.ProfileResult;
+import com.routiaback.personalization.domain.BodyGoal;
+import com.routiaback.personalization.domain.Gender;
+import com.routiaback.personalization.domain.LocationSource;
+import com.routiaback.personalization.domain.RoutineDifficulty;
+import com.routiaback.personalization.domain.RoutineTimePreference;
+import com.routiaback.personalization.domain.SkinType;
+import com.routiaback.personalization.domain.UserPreference;
+import com.routiaback.personalization.domain.UserProfile;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class PersonalizationServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-08-15T00:00:00Z");
+    private final FakeUserRepository users = new FakeUserRepository();
+    private final FakeProfileRepository profiles = new FakeProfileRepository();
+    private final FakeNeedsRepository needs = new FakeNeedsRepository();
+    private final FakeImageStorage images = new FakeImageStorage();
+    private PersonalizationService service;
+
+    @BeforeEach
+    void setUp() {
+        users.user = User.create("user@example.com", "hash", "Soeun", NOW).withId(1L);
+        needs.activeBodyCodes.addAll(Set.of("SWELLING", "FATIGUE"));
+        needs.activeSkinCodes.addAll(Set.of("ACNE", "PORE"));
+        needs.activeGoals.addAll(Set.of(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT));
+        needs.activeTools.addAll(Set.of("FACE_FASCIA_TOOL"));
+        service = new PersonalizationService(users, profiles, needs, images,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void returnsNullableProfileWhenProfileRowDoesNotExist() {
+        ProfileResult result = service.getProfile(1L, 1L);
+
+        assertThat(result.height()).isNull();
+        assertThat(result.profileImage()).isNull();
+    }
+
+    @Test
+    void rejectsAccessToAnotherUsersPath() {
+        assertThatThrownBy(() -> service.getProfile(1L, 2L))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_DATA_ACCESS_DENIED);
+    }
+
+    @Test
+    void returnsNotFoundWhenAuthenticatedUserNoLongerExists() {
+        users.user = null;
+
+        assertThatThrownBy(() -> service.getProfile(1L, 1L))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    void createsProfileAndStoresGpsLocation() {
+        ProfileResult result = service.updateProfile(1L, 1L, new UpdateProfileCommand(
+                new BigDecimal("165.5"), new BigDecimal("55.2"), Gender.FEMALE, null,
+                null, null, new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"), LocationSource.GPS));
+
+        assertThat(result.height()).isEqualByComparingTo("165.5");
+        assertThat(result.locationSource()).isEqualTo(LocationSource.GPS);
+        assertThat(result.locationUpdatedAt()).isEqualTo(NOW);
+        assertThat(profiles.profile).isNotNull();
+    }
+
+    @Test
+    void rejectsLocationChangeWithoutLocationSource() {
+        assertThatThrownBy(() -> service.updateProfile(1L, 1L, new UpdateProfileCommand(
+                null, null, null, null, null, null,
+                new BigDecimal("37.5665000"), new BigDecimal("126.9780000"), null)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_PROFILE_DATA);
+
+        assertThat(profiles.profile).isNull();
+    }
+
+    @Test
+    void replacesAndDeduplicatesConcernLists() {
+        NeedsResult result = service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                BodyGoal.MAINTAIN, List.of("swelling", "SWELLING", "FATIGUE"),
+                SkinType.DRY, List.of("ACNE"), RoutineTimePreference.MORNING,
+                RoutineDifficulty.SIMPLE));
+
+        assertThat(result.bodyConcerns()).containsExactly("SWELLING", "FATIGUE");
+        assertThat(result.skinConcerns()).containsExactly("ACNE");
+    }
+
+    @Test
+    void storesMultipleBodyGoalsAndOwnedToolsAsFinalSelections() {
+        NeedsResult result = service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, List.of("SWELLING"), SkinType.NORMAL, List.of("ACNE"),
+                null, null, List.of(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT, BodyGoal.MAINTAIN),
+                List.of("face_fascia_tool", "FACE_FASCIA_TOOL")));
+
+        assertThat(result.bodyGoals()).containsExactly(BodyGoal.MAINTAIN, BodyGoal.BUILD_HABIT);
+        assertThat(result.ownedTools()).containsExactly("FACE_FASCIA_TOOL");
+        assertThat(result.bodyGoal()).isEqualTo(BodyGoal.MAINTAIN);
+    }
+
+    @Test
+    void rejectsUnknownOwnedToolWithoutReplacingStoredSelections() {
+        assertThatThrownBy(() -> service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, null, null, null, null, null,
+                List.of(BodyGoal.MAINTAIN), List.of("UNKNOWN_TOOL"))))
+                .isInstanceOf(ApiException.class).extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_OWNED_TOOL);
+        assertThat(needs.tools).isEmpty();
+    }
+
+    @Test
+    void rejectsUnknownConcernWithoutChangingStoredNeeds() {
+        assertThatThrownBy(() -> service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, List.of("UNKNOWN"), null, null, null, null)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_BODY_CONCERN);
+
+        assertThat(needs.preference).isNull();
+        assertThat(needs.bodyCodes).isEmpty();
+    }
+
+    @Test
+    void emptyConcernArrayRemovesEverySelection() {
+        needs.bodyCodes.add("SWELLING");
+
+        NeedsResult result = service.updateNeeds(1L, 1L, new UpdateNeedsCommand(
+                null, List.of(), null, null, null, null));
+
+        assertThat(result.bodyConcerns()).isEmpty();
+    }
+
+    @Test
+    void storageFailureDoesNotChangeProfileImageKey() {
+        profiles.profile = UserProfile.empty(1L, NOW).updateProfileImage("old/key.jpg", NOW);
+        images.failStore = true;
+
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/jpeg")))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PROFILE_IMAGE_STORAGE_FAILED);
+
+        assertThat(profiles.profile.profileImageKey()).isEqualTo("old/key.jpg");
+    }
+
+    @Test
+    void rejectsUnsupportedOrOversizedProfileImage() {
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(new byte[]{1}, "image/gif")))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_PROFILE_IMAGE);
+
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(oversizedJpeg(), "image/jpeg")))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.PROFILE_IMAGE_TOO_LARGE);
+
+        assertThat(profiles.profile).isNull();
+    }
+
+    @Test
+    void rejectsImageWhenBytesDoNotMatchDeclaredContentType() {
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/png")))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_PROFILE_IMAGE);
+
+        assertThat(profiles.profile).isNull();
+    }
+
+    @Test
+    void acceptsImagesWhenBytesMatchDeclaredContentTypes() {
+        ProfileResult jpeg = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(jpegBytes(), "image/jpeg"));
+        ProfileResult png = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(pngBytes(), "image/png"));
+        ProfileResult webp = service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(webpBytes(), "image/webp"));
+
+        assertThat(jpeg.profileImage()).isEqualTo("1/new-key.jpg");
+        assertThat(png.profileImage()).isEqualTo("1/new-key.png");
+        assertThat(webp.profileImage()).isEqualTo("1/new-key.webp");
+    }
+
+    @Test
+    void removesNewObjectWhenDatabaseSaveFails() {
+        profiles.failSave = true;
+
+        assertThatThrownBy(() -> service.uploadProfileImage(
+                1L, 1L, new ProfileImageUpload(pngBytes(), "image/png")))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(images.deleted).containsExactly("1/new-key.png");
+    }
+
+    private byte[] jpegBytes() {
+        return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+    }
+
+    private byte[] pngBytes() {
+        return new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    }
+
+    private byte[] webpBytes() {
+        return new byte[]{0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50};
+    }
+
+    private byte[] oversizedJpeg() {
+        byte[] content = new byte[5 * 1024 * 1024 + 1];
+        byte[] signature = jpegBytes();
+        System.arraycopy(signature, 0, content, 0, signature.length);
+        return content;
+    }
+
+    private static class FakeUserRepository implements UserRepositoryPort {
+        private User user;
+
+        @Override public boolean existsByEmail(String email) { return user != null && user.email().equals(email); }
+        @Override public Optional<User> findByEmail(String email) { return existsByEmail(email) ? Optional.of(user) : Optional.empty(); }
+        @Override public Optional<User> findById(Long id) { return user != null && user.id().equals(id) ? Optional.of(user) : Optional.empty(); }
+        @Override public User save(User user) { this.user = user; return user; }
+    }
+
+    private static class FakeProfileRepository implements UserProfileRepositoryPort {
+        private UserProfile profile;
+        private boolean failSave;
+
+        @Override public Optional<UserProfile> findByUserId(Long userId) { return Optional.ofNullable(profile); }
+        @Override public UserProfile save(UserProfile profile) {
+            if (failSave) throw new IllegalStateException("database unavailable");
+            this.profile = profile;
+            return profile;
+        }
+    }
+
+    private static class FakeNeedsRepository implements UserNeedsRepositoryPort {
+        private UserPreference preference;
+        private final LinkedHashSet<String> bodyCodes = new LinkedHashSet<>();
+        private final LinkedHashSet<String> skinCodes = new LinkedHashSet<>();
+        private final Set<String> activeBodyCodes = new LinkedHashSet<>();
+        private final Set<String> activeSkinCodes = new LinkedHashSet<>();
+        private final LinkedHashSet<BodyGoal> goals = new LinkedHashSet<>();
+        private final LinkedHashSet<String> tools = new LinkedHashSet<>();
+        private final Set<BodyGoal> activeGoals = new LinkedHashSet<>();
+        private final Set<String> activeTools = new LinkedHashSet<>();
+
+        @Override public Optional<UserPreference> findPreferenceByUserId(Long userId) { return Optional.ofNullable(preference); }
+        @Override public UserPreference savePreference(UserPreference preference) { this.preference = preference; return preference; }
+        @Override public List<String> findBodyConcernCodes(Long userId) { return List.copyOf(bodyCodes); }
+        @Override public List<String> findSkinConcernCodes(Long userId) { return List.copyOf(skinCodes); }
+        @Override public List<BodyGoal> findBodyGoals(Long userId) { return List.copyOf(goals); }
+        @Override public List<String> findOwnedToolCodes(Long userId) { return List.copyOf(tools); }
+        @Override public Map<String, String> findBodyConcernNames(Collection<String> codes) { return Map.of(); }
+        @Override public Map<String, String> findSkinConcernNames(Collection<String> codes) { return Map.of(); }
+        @Override public Map<String, String> findBodyGoalNames(Collection<BodyGoal> codes) { return Map.of(); }
+        @Override public Map<String, String> findOwnedToolNames(Collection<String> codes) { return Map.of(); }
+        @Override public Set<String> findActiveBodyConcernCodes(Collection<String> codes) {
+            Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeBodyCodes); return found;
+        }
+        @Override public Set<String> findActiveSkinConcernCodes(Collection<String> codes) {
+            Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeSkinCodes); return found;
+        }
+        @Override public Set<BodyGoal> findActiveBodyGoals(Collection<BodyGoal> codes) {
+            Set<BodyGoal> found = new LinkedHashSet<>(codes); found.retainAll(activeGoals); return found;
+        }
+        @Override public Set<String> findActiveOwnedToolCodes(Collection<String> codes) {
+            Set<String> found = new LinkedHashSet<>(codes); found.retainAll(activeTools); return found;
+        }
+        @Override public void replaceBodyConcerns(Long userId, Collection<String> codes) { bodyCodes.clear(); bodyCodes.addAll(codes); }
+        @Override public void replaceSkinConcerns(Long userId, Collection<String> codes) { skinCodes.clear(); skinCodes.addAll(codes); }
+        @Override public void replaceBodyGoals(Long userId, Collection<BodyGoal> codes) { goals.clear(); goals.addAll(codes); }
+        @Override public void replaceOwnedTools(Long userId, Collection<String> codes) { tools.clear(); tools.addAll(codes); }
+    }
+
+    private static class FakeImageStorage implements ProfileImageStoragePort {
+        private boolean failStore;
+        private final List<String> deleted = new ArrayList<>();
+
+        @Override public String store(Long userId, ProfileImageUpload upload) {
+            if (failStore) throw new IllegalStateException("storage unavailable");
+            String extension = switch (upload.contentType()) {
+                case "image/png" -> "png";
+                case "image/webp" -> "webp";
+                default -> "jpg";
+            };
+            return userId + "/new-key." + extension;
+        }
+        @Override public void delete(String key) { deleted.add(key); }
+    }
+}

@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,6 +20,7 @@ public class SecurityConfig {
 	SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
 		return http
 			.csrf(AbstractHttpConfigurer::disable)
+			.cors(Customizer.withDefaults())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.exceptionHandling(exceptions -> exceptions
 				.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
@@ -27,6 +29,7 @@ public class SecurityConfig {
 					"/v3/api-docs/**",
 					"/swagger-ui/**",
 					"/swagger-ui.html",
+					"/actuator/health",
 					"/api/v1/auth/email/verification-code",
 					"/api/v1/auth/email/verify",
 					"/api/v1/auth/email/check-duplicate",

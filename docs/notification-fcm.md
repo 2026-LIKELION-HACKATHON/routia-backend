@@ -3,7 +3,7 @@
 ## 동작 요약
 
 - 알림 ON: 알림 시각 10분 전에 다음 일자 루틴을 생성하고 `notification_scheduled_at`에 알림 시각을 저장한다.
-- 알림 OFF/미설정: 저장된 알림 시각과 무관하게 기본 시각 06:00에 루틴을 생성하고 `notification_scheduled_at`은 `NULL`로 저장한다.
+- 알림 OFF/미설정: 저장된 알림 시각과 무관하게 기본 시각 00:00에 루틴을 생성하고 `notification_scheduled_at`은 `NULL`로 저장한다.
 - 온보딩 완료 직후 생성되는 최초 루틴은 알림 대상이 아니다.
 - Notification Scheduler는 `READY`이면서 발송 예정 시각이 지난 루틴만 조회한 뒤 발송 직전에 현재 알림 설정과 Device 소유권을 다시 확인한다.
 - FCM 성공/실패는 `notification_logs`에 `SENT`/`FAILED`로 기록되며 루틴의 `READY` 상태를 변경하지 않는다.
@@ -60,7 +60,7 @@ NOTIFICATION_PROVIDER=firebase
 GOOGLE_APPLICATION_CREDENTIALS=/secure/path/firebase-service-account.json
 NOTIFICATION_SCHEDULER_DELAY_MS=60000
 ROUTINE_GENERATION_LEAD_MINUTES=10
-ROUTINE_DEFAULT_GENERATION_TIME=06:00
+ROUTINE_DEFAULT_GENERATION_TIME=00:00
 ROUTINE_DEFAULT_TIMEZONE=Asia/Seoul
 ```
 

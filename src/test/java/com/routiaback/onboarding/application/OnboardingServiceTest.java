@@ -188,7 +188,7 @@ class OnboardingServiceTest {
         assertThat(scheduleRepository.schedule.notificationEnabled()).isFalse();
         assertThat(scheduleRepository.schedule.notificationTime()).isNull();
         assertThat(scheduleRepository.schedule.nextGenerationAt())
-                .isEqualTo(Instant.parse("2026-08-15T21:00:00Z"));
+                .isEqualTo(Instant.parse("2026-08-15T15:00:00Z"));
         verify(routineGenerationService).generate(org.mockito.ArgumentMatchers.eq(1L), any(),
                 org.mockito.ArgumentMatchers.eq(com.routiaback.routine.domain.RoutineGenerationType.INITIAL_ONBOARDING),
                 org.mockito.ArgumentMatchers.isNull());

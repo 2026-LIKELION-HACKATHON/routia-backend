@@ -58,7 +58,7 @@ class NotificationSettingsServiceTest {
         NotificationSettingsService.SettingsResult result = service.update(1L, 1L, false, null);
         assertThat(result.notificationEnabled()).isFalse();
         assertThat(result.notificationTime()).isEqualTo(LocalTime.of(10, 0));
-        assertThat(schedules.schedule.nextGenerationAt()).isEqualTo(Instant.parse("2026-08-15T21:00:00Z"));
+        assertThat(schedules.schedule.nextGenerationAt()).isEqualTo(Instant.parse("2026-08-15T15:00:00Z"));
     }
 
     @Test

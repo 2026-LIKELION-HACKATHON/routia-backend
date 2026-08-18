@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RoutineGenerationScheduleCalculator {
     public static final int GENERATION_LEAD_MINUTES = 10;
-    public static final LocalTime DEFAULT_GENERATION_TIME = LocalTime.of(6, 0);
+    public static final LocalTime DEFAULT_GENERATION_TIME = LocalTime.MIDNIGHT;
     private final int generationLeadMinutes;
     private final LocalTime defaultGenerationTime;
     private final String defaultTimezone;
@@ -20,7 +20,7 @@ public class RoutineGenerationScheduleCalculator {
     @Autowired
     public RoutineGenerationScheduleCalculator(
             @Value("${routia.routine-generation.lead-minutes:10}") int generationLeadMinutes,
-            @Value("${routia.routine-generation.default-time:06:00}") LocalTime defaultGenerationTime,
+            @Value("${routia.routine-generation.default-time:00:00}") LocalTime defaultGenerationTime,
             @Value("${routia.routine-generation.default-timezone:Asia/Seoul}") String defaultTimezone) {
         this.generationLeadMinutes = generationLeadMinutes;
         this.defaultGenerationTime = defaultGenerationTime;

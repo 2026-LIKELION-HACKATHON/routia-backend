@@ -2,6 +2,7 @@ package com.routiaback.home.presentation;
 
 import com.routiaback.global.common.apiResponse.ApiResponse;
 import com.routiaback.home.application.HomeService;
+import com.routiaback.home.application.TodayDirectionService;
 import com.routiaback.home.application.result.HomeResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -20,10 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class HomeController {
 
     private final HomeService homeService;
+    private final TodayDirectionService todayDirectionService;
 
     @Operation(summary = "홈 화면 조회")
     @GetMapping
     public ApiResponse<HomeResponse> getHome(@AuthenticationPrincipal Long userId) {
         return ApiResponse.success(HomeResponse.from(homeService.getHome(userId)));
+    }
+
+    @Operation(summary = "오늘의 방향 모달 조회", description = "오늘 생성된 루틴을 오전·오후·밤으로 묶어 반환합니다.")
+    @GetMapping("/today-direction")
+    public ApiResponse<TodayDirectionResponse> getTodayDirection(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.success(TodayDirectionResponse.from(todayDirectionService.getToday(userId)));
     }
 }
